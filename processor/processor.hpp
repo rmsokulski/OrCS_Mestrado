@@ -45,7 +45,13 @@ public:
 };
 
 class processor_t {
-    private:    
+    private:
+	//===============
+	//VIMA Conversion
+	//===============
+	bool conversion_enabled;
+	uint32_t VIMA_SIZE;
+
 	//=============
 	//Fetch Related
 	//=============
@@ -247,8 +253,10 @@ class processor_t {
 		uint32_t memory_write_executed;
 		uint32_t memory_hive_executed;
 		uint32_t memory_vima_executed;
-
-
+		// ====================================================================
+		// VIMA Converter
+		// ====================================================================
+		vima_converter_t vima_converter;
 		
 		// ====================================================================
 		/// Methods
@@ -268,6 +276,7 @@ class processor_t {
 		void update_registers(reorder_buffer_line_t *robLine);
 		void solve_registers_dependency(reorder_buffer_line_t *rob_line);
 		int32_t searchPositionROB(ROB_t *rob);
+		void returnPositionROB(ROB_t *rob);
 		void removeFrontROB(ROB_t *rob);
 		// ====================================================================
 		// MOB READ RELATED
@@ -309,7 +318,14 @@ class processor_t {
 		uint32_t mob_vima();
 		void clean_mob_vima();
 		
+
 		void commit();
+
+		// ====================================================================
+		// Conversion
+		// ====================================================================
+		void check_conversion();
+		void conversion_invalidation(uint64_t unique_conversion_id);
 
 		// ====================================================================
 		// Bool Functions @return 
@@ -412,6 +428,7 @@ class processor_t {
 
 
 		INSTANTIATE_GET_SET(uint64_t,processor_id)
+		INSTANTIATE_GET_SET(uint64_t,VIMA_SIZE)
 		// ====================================================================
 		// Statistics
 		// ====================================================================

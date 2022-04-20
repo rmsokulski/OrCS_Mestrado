@@ -66,6 +66,7 @@ class circular_buffer_t {
         void pop_back();
         void pop_push();
         void print_all();
+        inline void pop_all();
 };
 // ============================================================================
 template <class CB_TYPE>
@@ -98,7 +99,7 @@ void circular_buffer_t<CB_TYPE>::allocate(uint32_t elements) {
 // ============================================================================
 template <class CB_TYPE>
 inline CB_TYPE& circular_buffer_t<CB_TYPE>::operator[](uint32_t index) {
-    ERROR_ASSERT_PRINTF(index < this->capacity, "Trying to access beyond the circular buffer size.\n")
+    ERROR_ASSERT_PRINTF(index < this->size, "Trying to access beyond the circular buffer size.\n")
     ERROR_ASSERT_PRINTF(this->data != NULL, "Trying to access beyond the circular buffer size.\n")
 
     uint32_t position = this->beg_index + index;
@@ -278,6 +279,14 @@ void circular_buffer_t<CB_TYPE>::print_all() {
        ORCS_PRINTF("%s\n",this->data[i].content_to_string().c_str())
     }
 }
+// ==============================================================================
+//Reseta o buffer circular
 
+template <class CB_TYPE>
+inline void circular_buffer_t<CB_TYPE>::pop_all() {
+    this->beg_index = 0;
+    this->end_index = 0;
+    this->size = 0;
+}
 
 #endif  // _CIRCULAR_BUFFER_HPP_

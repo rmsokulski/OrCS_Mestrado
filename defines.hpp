@@ -16,6 +16,7 @@
 #define FAIL 0                  /// FAIL when return is int32_t or uint32_t
 #define OK 1                    /// OK when return is int32_t or uint32_t
 #define NOT_ALL_REGS 2
+#define CLEANING_WRITES 3
 #define TRACE_LINE_SIZE 512
 
 #define DEBUG 0
@@ -32,6 +33,8 @@
 #define DV_DEBUG 0
 #define VECTORIZE_AFTER 1
 #define UNIMPLEMENTED_ALERTS 0
+#define VIMA_CONVERSION_DEBUG 0
+
 
 // ========================
 // Defines Simulators Caracteristics
@@ -42,5 +45,15 @@
 #define MAX_REGISTER_NUMBER 256
 #define MAX_MEM_OPERATIONS 16
 // ========================
+
+// =======================
+// Defines VIMA converter
+// =======================
+#define CURRENT_CONVERSIONS_SIZE 1000
+#define AVX_256_SIZE 32
+#define AVX_512_SIZE 64
+#define CONVERSION_BLACKLIST_SIZE 5
+
+
 
 #endif // DEFINES_H

@@ -1,3 +1,16 @@
+class transaction_t {
+    public:
+        uint8_t status;
+        uint64_t readyAt;
+        uint64_t unique_conversion_id;
+
+        void package_clean() {
+            this->status = 0;
+            this->readyAt = 0;
+            this->unique_conversion_id = 0;
+        }
+};
+
 class vima_controller_t {
     private:
         uint32_t VIMA_BUFFER;
@@ -23,6 +36,14 @@ class vima_controller_t {
         std::vector<memory_package_t*> sub_request_queue;
         std::vector<vima_vector_t*> working_vectors;
         
+
+        // Transactions controller
+        // 0 -> Esperando CPU
+        // 1 -> Sucesso
+        // 2 -> FALHA
+        // <<Transaction status, readyAt>, unique_conversion_id>
+        circular_buffer_t<transaction_t> CPU_transactions_status;
+
         uint64_t index_bits_mask;
         uint64_t index_bits_shift;
 
@@ -41,6 +62,12 @@ class vima_controller_t {
         uint64_t request_count;
         uint64_t total_wait;
 
+        // Communications
+        uint32_t BURST_WIDTH;
+        uint32_t LINE_SIZE;
+        uint32_t latency_burst;
+
+
         INSTANTIATE_GET_SET_ADD (uint32_t, VIMA_BUFFER)
         INSTANTIATE_GET_SET_ADD (uint32_t, VIMA_VECTOR_SIZE)
         INSTANTIATE_GET_SET_ADD (uint32_t, VIMA_CACHE_ASSOCIATIVITY)
@@ -48,6 +75,10 @@ class vima_controller_t {
         INSTANTIATE_GET_SET_ADD (uint32_t, VIMA_CACHE_SIZE)
         INSTANTIATE_GET_SET_ADD (uint32_t, VIMA_UNBALANCED)
         INSTANTIATE_GET_SET_ADD (float, CORE_TO_BUS_CLOCK_RATIO)
+        INSTANTIATE_GET_SET_ADD (uint32_t, BURST_WIDTH)
+        INSTANTIATE_GET_SET_ADD (uint32_t, LINE_SIZE)
+        INSTANTIATE_GET_SET_ADD (uint32_t, latency_burst)
+
 
         INSTANTIATE_GET_SET_ADD (uint32_t, lines)
         INSTANTIATE_GET_SET_ADD (uint32_t, sets)
@@ -82,4 +113,14 @@ class vima_controller_t {
         void instruction_ready (size_t index);
         void statistics();
         void reset_statistics();
+        inline void confirm_transaction(uint8_t status, uint64_t unique_conversion_id);
 };
+
+inline void vima_controller_t::confirm_transaction(uint8_t status, uint64_t unique_conversion_id) {
+    transaction_t new_transaction;
+    new_transaction.package_clean();
+    new_transaction.status = status;
+    new_transaction.readyAt = orcs_engine.get_global_cycle() + this->latency_burst;
+    new_transaction.unique_conversion_id = unique_conversion_id;
+    this->CPU_transactions_status.push_back(new_transaction);
+}
