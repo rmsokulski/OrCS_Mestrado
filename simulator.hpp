@@ -68,6 +68,7 @@ class memory_order_buffer_line_t;
 class functional_unit_t;
 class processor_t;
 class instruction_set_t;
+class memory_package_t;
 
 //  =========================================//
 // Cache Classes
@@ -113,6 +114,7 @@ class hive_register_t;
 //  =========================================//
 class vima_controller_t;
 class vima_vector_t;
+class vima_converter_t;
 //  =========================================//
 // DATA Types
 // ====================================
@@ -148,8 +150,6 @@ extern orcs_engine_t orcs_engine;
 #include "./main_memory/memory_request_client.hpp"
 #include "./package/opcode_package.hpp"
 
-
-
 //  =========================================//
 // Usefull Classes
 //  =========================================//
@@ -161,6 +161,11 @@ extern orcs_engine_t orcs_engine;
 //  =========================================//
 #include "./processor/memory_disambiguation/disambiguation.hpp"
 #include "./processor/memory_disambiguation/disambiguation_hashed.hpp"
+
+//  =========================================//
+// VIMA Converter
+//  =========================================//
+#include "./processor/vima_converter.hpp"
 
 //  =========================================//
 // Core Includes

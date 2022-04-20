@@ -33,11 +33,27 @@ class uop_package_t{
     uint32_t throughput;
     functional_unit_t *functional_unit;
 
+    uint8_t uop_id;
+    bool is_masked;
+
+    int8_t linked_to_converter; // -1 -> Not linked
+                                // 0 -> First load
+                                // 1 -> Second load
+                                // 2 -> Op
+                                // 3 -> Store
+    uint64_t unique_conversion_id;
+    bool ignore_on_conversion_success;
+    int64_t linked_to_iteration; // Caso esteja sendo ignorada, uma instrução precisa confirmar seu endereço com a AGU e o VC
+                                  // então essa variável indica a iteração a ser utilizada para a validação do endereço
+
+    bool already_sent;  // Caso já tenha sido avaliado pelo conversor, contém true
+                        // é útil porque o controle do conversor é feito antes das verificações de entradas no ROB e MOBs
+
 
     void opcode_to_uop(uint64_t uop_number, 
             instruction_operation_t uop_operation, 
             uint32_t latency, uint32_t throughput, functional_unit_t *fu_id,
-            opcode_package_t opcode);
+            opcode_package_t opcode, uint8_t uop_id, bool is_masked);
 
     inline void add_memory_operation(uint64_t memory_address, uint32_t memory_size);
 

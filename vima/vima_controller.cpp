@@ -16,6 +16,9 @@ vima_controller_t::vima_controller_t(){
     this->vima_op_latencies = NULL;
     this->current_cache_access_latency = 0;
 
+    this->CPU_confirmed_transaction = false;
+    this->CPU_confirmation_readyAt = 0;
+
     this->index_bits_mask = 0;
     this->index_bits_shift = 0;
 
@@ -39,6 +42,8 @@ vima_controller_t::vima_controller_t(){
     this->VIMA_CACHE_SIZE = 0;
     this->VIMA_UNBALANCED = 0;
     this->CORE_TO_BUS_CLOCK_RATIO = 0.0;
+
+
 
 }
 
@@ -184,7 +189,8 @@ void vima_controller_t::check_completion (int index){
             if (read2_unbalanced->status != PACKAGE_STATE_READY) return;
         }
     }
-    vima_buffer[index]->updatePackageWait (this->vima_op_latencies[vima_buffer[index]->memory_operation]);
+    vima_buffer[index]->updatePackageTransactional (this->vima_op_latencies[vima_buffer[index]->memory_operation]);
+
 
     if (read1 != NULL) {
         read1->set_lru (orcs_engine.get_global_cycle());
@@ -294,6 +300,13 @@ void vima_controller_t::check_cache (int index) {
     this->current_cache_access_latency = 0;
 }
 
+
+/*
+Transmit -> TRANSACTIONAL -> CONFIRM ->  -> WAIT
+TRANSACTIONAL: Espera a operação completar com sucesso e dá um readyAt para avisar a CPU após k ciclos.
+CONFIRM: Avisa a CPU Espera uma resposta da CPU confirmando (readyAt). Envia dados e vai para WAIT após K *3 ciclos (Enviar Ld 1 + ld 2 + store)
+*/
+
 void vima_controller_t::clock(){
     for (uint32_t i = 0; i < sets; i++){
         for (size_t j = 0; j < VIMA_CACHE_ASSOCIATIVITY; j++) {
@@ -311,8 +324,60 @@ void vima_controller_t::clock(){
                 if (vima_buffer[current_index]->vima_write != 0) ORCS_PRINTF (" | WRITE: [%lu]", vima_buffer[current_index]->vima_write)
                 ORCS_PRINTF ("\n")
             #endif
+            printf("Wait\n");
+            this->CPU_confirmed_transaction = 0; /* Wait for the next conversion status */
             this->instruction_ready (0);
             break;
+        case PACKAGE_STATE_CONFIRM:
+            // The CPU is informed and the last iteration data is sent from VIMA to CPU
+            if (vima_buffer[current_index]->readyAt <= orcs_engine.get_global_cycle()) { // CPU data arriving
+                // **********
+                // Inform CPU
+                // **********
+                if (vima_buffer[current_index]->cpu_informed == false) {
+                    printf("%lu VIMA informing CPU...\n", orcs_engine.get_global_cycle());
+                    orcs_engine.processor->vima_converter.vima_execution_completed(vima_buffer[current_index]);
+                    vima_buffer[current_index]->cpu_informed = true;
+                }
+                // *****************************************
+                // Check if already has the CPU confirmation
+                // *****************************************
+                if (this->CPU_confirmed_transaction == 1 /* Success */ && this->CPU_confirmation_readyAt < orcs_engine.get_global_cycle())
+                {
+                    printf("%lu VIMA sending last loads and operation result %lu\n", orcs_engine.get_global_cycle(), orcs_engine.get_global_cycle() + this->latency_burst * 3);
+                    vima_buffer[current_index]->updatePackageWait(this->latency_burst * 3); // VIMA data sent to CPU
+                } 
+                else if (this->CPU_confirmed_transaction == 2 /* Failure */ && this->CPU_confirmation_readyAt < orcs_engine.get_global_cycle())
+                {
+                    printf("%lu VIMA discarding results after inform CPU %lu\n", orcs_engine.get_global_cycle(), orcs_engine.get_global_cycle() + 0);
+                    vima_buffer[current_index]->updatePackageWait(0); // VIMA discard results
+                }
+                
+            }
+            break;
+        case PACKAGE_STATE_TRANSACTIONAL:
+            // If VIMA operation was already completed
+            if (vima_buffer[current_index]->readyAt <= orcs_engine.get_global_cycle()) {
+
+                // ***************************************************
+                // If before completion the conversion was invalidated 
+                // ***************************************************
+                if (this->CPU_confirmed_transaction == 2 /* Failure */ && this->CPU_confirmation_readyAt < orcs_engine.get_global_cycle())
+                {
+                    printf("%lu VIMA discarding results before inform CPU %lu\n", orcs_engine.get_global_cycle(), orcs_engine.get_global_cycle() + 0);
+                    vima_buffer[current_index]->updatePackageWait(0); // VIMA discard results
+                } 
+                // *********
+                // Otherwise
+                // *********
+                else {
+                    printf("%lu Transactional until %lu\n", orcs_engine.get_global_cycle(), orcs_engine.get_global_cycle() + this->latency_burst);
+                    vima_buffer[current_index]->cpu_informed = false;
+                    vima_buffer[current_index]->updatePackageConfirm(this->latency_burst);
+                }
+            }
+            break;
+
         case PACKAGE_STATE_TRANSMIT:
             this->check_completion(0);
             break;
@@ -346,6 +411,13 @@ void vima_controller_t::allocate(){
     set_VIMA_CACHE_ASSOCIATIVITY (cfg_vima["VIMA_CACHE_ASSOCIATIVITY"]);
     set_VIMA_CACHE_LATENCY (cfg_vima["VIMA_CACHE_LATENCY"]);
     set_VIMA_UNBALANCED (cfg_vima["VIMA_UNBALANCED"]);
+
+    // Communication
+    set_BURST_WIDTH(cfg_memory_ctrl["BURST_WIDTH"]);
+    set_LINE_SIZE(cfg_memory_ctrl["LINE_SIZE"]);
+    set_latency_burst(ceil ((LINE_SIZE/BURST_WIDTH) * CORE_TO_BUS_CLOCK_RATIO));
+
+
 
     this->set_lines (this->get_VIMA_CACHE_SIZE()/this->get_VIMA_VECTOR_SIZE());
     this->set_sets (lines/this->get_VIMA_CACHE_ASSOCIATIVITY());

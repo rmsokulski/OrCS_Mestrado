@@ -64,12 +64,13 @@ const char* get_enum_instruction_operation_char(instruction_operation_t type) {
 /// Enumerates the processor stages, used to indicate when the branch will be solved
 const char *get_enum_processor_stage_char(processor_stage_t type) {
     switch (type) {
-        case PROCESSOR_STAGE_FETCH:     return "FETCH    "; break;
-        case PROCESSOR_STAGE_DECODE:    return "DECODE   "; break;
-        case PROCESSOR_STAGE_RENAME:    return "RENAME   "; break;
-        case PROCESSOR_STAGE_DISPATCH:  return "DISPATCH "; break;
-        case PROCESSOR_STAGE_EXECUTION: return "EXECUTION"; break;
-        case PROCESSOR_STAGE_COMMIT:    return "COMMIT   "; break;
+        case PROCESSOR_STAGE_FETCH:       return "FETCH       "; break;
+        case PROCESSOR_STAGE_DECODE:      return "DECODE      "; break;
+        case PROCESSOR_STAGE_RENAME:      return "RENAME      "; break;
+        case PROCESSOR_STAGE_DISPATCH:    return "DISPATCH    "; break;
+        case PROCESSOR_STAGE_EXECUTION:   return "EXECUTION   "; break;
+        case PROCESSOR_STAGE_COMMIT:      return "COMMIT      "; break;
+        case PROCESSOR_STAGE_WAITING_DYN: return "WAITING_DYN "; break;
     }
     ERROR_PRINTF("Wrong PROCESSOR_STAGE\n");
     return "FAIL";
@@ -114,12 +115,16 @@ const char *get_enum_package_state_char(package_state_t type) {
         case PACKAGE_STATE_FREE:     return "FREE"; break;
         case PACKAGE_STATE_READY:     return "READY"; break;
         case PACKAGE_STATE_TRANSMIT:     return "TRANSMIT"; break;
+        case PACKAGE_STATE_CONFIRM:       return "CONFIRM"; break;
+        case PACKAGE_STATE_TRANSACTIONAL: return "TRANSACTIONAL"; break;
         case PACKAGE_STATE_UNTREATED:     return "UNTREATED"; break;
         case PACKAGE_STATE_WAIT:     return "WAIT"; break;
         case PACKAGE_STATE_HIVE:    return "HIVE"; break;
         case PACKAGE_STATE_VIMA:    return "VIMA"; break;
         case PACKAGE_STATE_DRAM_FETCH:  return "DRAM_FETCH"; break;
         case PACKAGE_STATE_DRAM_READY:  return "DRAM_READY"; break;
+        case PACKAGE_STATE_CONVERTED: return "CONVERTED"; break;
+        case PACKAGE_STATE_IGNORED: return "IGNORED"; break;
     }
     ERROR_PRINTF("Wrong PACKAGE_STATE\n");
     return "FAIL";

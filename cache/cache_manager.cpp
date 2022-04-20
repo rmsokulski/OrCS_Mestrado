@@ -564,6 +564,7 @@ void cache_manager_t::process (memory_package_t* request, int32_t* cache_indexes
                 ORCS_PRINTF (" sent to VIMA Controller.\n")
             #endif
             orcs_engine.vima_controller->addRequest (request);
+            printf("Sent to vima controller\n");
             break;
         default:
             ERROR_ASSERT_PRINTF (true, "WRONG MEMORY OPERATION TYPE")

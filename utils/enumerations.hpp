@@ -120,10 +120,14 @@ enum package_state_t {
     PACKAGE_STATE_READY,
     PACKAGE_STATE_WAIT,
     PACKAGE_STATE_TRANSMIT,
+    PACKAGE_STATE_CONFIRM,   // Waiting for the CPU confirmation and sending data (ld1 + ld2 + st)
+    PACKAGE_STATE_TRANSACTIONAL, // After a VIMA operation completes, sending the CPU confirmation
     PACKAGE_STATE_HIVE,
     PACKAGE_STATE_VIMA,
     PACKAGE_STATE_DRAM_FETCH,
-    PACKAGE_STATE_DRAM_READY
+    PACKAGE_STATE_DRAM_READY,
+    PACKAGE_STATE_CONVERTED,
+    PACKAGE_STATE_IGNORED // After a conversion be successful, the package goes to this state
 };
 const char *get_enum_package_state_char(package_state_t type);
 // ============================================================================
@@ -136,7 +140,8 @@ enum processor_stage_t {
     PROCESSOR_STAGE_RENAME,
     PROCESSOR_STAGE_DISPATCH,
     PROCESSOR_STAGE_EXECUTION,
-    PROCESSOR_STAGE_COMMIT
+    PROCESSOR_STAGE_COMMIT,
+    PROCESSOR_STAGE_WAITING_DYN // Waiting for conversion confirmation
 };
 const char *get_enum_processor_stage_char(processor_stage_t type);
 // ============================================================================

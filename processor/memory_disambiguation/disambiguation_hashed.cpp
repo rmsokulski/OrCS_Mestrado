@@ -80,7 +80,21 @@ void disambiguation_hashed_t::make_memory_dependences(memory_order_buffer_line_t
 		for (uint32_t k = 0; k < ROB_SIZE; k++) {
 			if (old_mob_line->mem_deps_ptr_array[k] == NULL) {
 				old_mob_line->mem_deps_ptr_array[k] = new_mob_line;
+				/*if(new_mob_line->uop_number == 3067) {
+					printf("3067 dependent of %lu\n", old_mob_line->uop_number);
+				}
+				if(new_mob_line->uop_number == 3073) {
+					printf("3073 dependent of %lu\n", old_mob_line->uop_number);
+				}*/
 				new_mob_line->wait_mem_deps_number++;
+
+				/*if(new_mob_line->uop_number == 3067) {
+					printf("wait_mem_deps_number for 3067: %u\n", new_mob_line->wait_mem_deps_number);
+				}
+				if(new_mob_line->uop_number == 3073) {
+					printf("wait_mem_deps_number for 3073: %u\n", new_mob_line->wait_mem_deps_number);
+				}*/
+
 				if (DEBUG) ORCS_PRINTF ("Disamb make_memory_dependencies(): load %lu -> %lu.\n", old_mob_line->memory_address, new_mob_line->memory_address)
 				break;
 			}
@@ -93,6 +107,9 @@ void disambiguation_hashed_t::make_memory_dependences(memory_order_buffer_line_t
 		for (uint32_t k = 0; k < ROB_SIZE; k++) {
 			if (old_mob_line->mem_deps_ptr_array[k] == NULL) {
 				old_mob_line->mem_deps_ptr_array[k] = new_mob_line;
+				/*if(new_mob_line->uop_number == 319) {
+					printf("319 dependent of %lu\n", old_mob_line->uop_number);
+				}*/
 				new_mob_line->wait_mem_deps_number++;
 				if (DEBUG) ORCS_PRINTF ("Disamb make_memory_dependencies(): store %lu -> %lu.\n", old_mob_line->memory_address, new_mob_line->memory_address)
 				break;
@@ -150,7 +167,16 @@ void disambiguation_hashed_t::solve_memory_dependences(memory_order_buffer_line_
 			}
 		}
 
+
+		if(mob_line->uop_number == 288) {
+			printf("288 removed dependency from %lu\n", mob_line->mem_deps_ptr_array[j]->uop_number);
+			printf("Remaining dependences before: %u\n", mob_line->mem_deps_ptr_array[j]->wait_mem_deps_number);
+
+		}
 		mob_line->mem_deps_ptr_array[j]->wait_mem_deps_number--;
+		if(mob_line->uop_number == 288) {
+			printf("Remaining dependences: %u\n", mob_line->mem_deps_ptr_array[j]->wait_mem_deps_number);
+		}
 		if (ADDRESS_TO_ADDRESS == 1) {
 			if (mob_line->mem_deps_ptr_array[j]->uop_executed == true &&
 				mob_line->mem_deps_ptr_array[j]->wait_mem_deps_number == 0 &&

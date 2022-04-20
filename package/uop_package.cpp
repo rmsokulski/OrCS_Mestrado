@@ -17,6 +17,12 @@ void uop_package_t::package_clean()
     this->hive_write = -1;
 
     this->is_vima = false;
+    this->linked_to_converter = -1;
+    this->unique_conversion_id = 0;
+    this->ignore_on_conversion_success = false;
+    this->linked_to_iteration = -1;
+    this->already_sent = false;
+
     
 
     memset(this->read_regs, POSITION_FAIL, sizeof(int32_t) * MAX_REGISTERS);
@@ -63,7 +69,7 @@ void uop_package_t::opcode_to_uop(
         uint64_t uop_number, 
         instruction_operation_t uop_operation,
         uint32_t latency, uint32_t throughput, functional_unit_t *fu_id,
-        opcode_package_t opcode)
+        opcode_package_t opcode, uint8_t uop_id, bool is_masked)
 {
     // ERROR_ASSERT_PRINTF(this->state == PACKAGE_STATE_FREE,
     //                     "Trying to decode to uop in a non-free location\n");
@@ -79,6 +85,14 @@ void uop_package_t::opcode_to_uop(
     this->latency = latency;
     this->throughput = throughput;
     this->functional_unit = fu_id;
+    this->uop_id = uop_id;
+    this->is_masked = is_masked;
+    this->linked_to_converter = -1;
+    this->unique_conversion_id = 0;
+    this->ignore_on_conversion_success = false;
+    this->linked_to_iteration = -1;
+    this->already_sent = false;
+
 
     memcpy(this->read_regs, opcode.read_regs, sizeof(int32_t) * MAX_REGISTERS);
     memcpy(this->write_regs, opcode.write_regs, sizeof(int32_t) * MAX_REGISTERS);
