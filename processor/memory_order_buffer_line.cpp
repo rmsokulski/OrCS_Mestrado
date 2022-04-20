@@ -23,6 +23,7 @@ void memory_order_buffer_line_t::package_clean() {
         this->hive_read2 = 0;
         this->hive_write = 0;
         this->is_vima = false;
+        this->unique_conversion_id = 0;
         this->rob_ptr=NULL;                 /// rob pointer
         this->uop_executed=false;
         this->uop_number = 0;
