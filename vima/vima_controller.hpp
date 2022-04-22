@@ -117,6 +117,9 @@ class vima_controller_t {
 };
 
 inline void vima_controller_t::confirm_transaction(uint8_t status, uint64_t unique_conversion_id) {
+#if VIMA_DEBUG 
+    printf("CPU confirmed transaction to VIMA: Status %u ID %lu\n", status, unique_conversion_id);
+#endif
     transaction_t new_transaction;
     new_transaction.package_clean();
     new_transaction.status = status;
