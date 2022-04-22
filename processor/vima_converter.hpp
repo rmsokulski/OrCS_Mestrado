@@ -152,9 +152,11 @@ class vima_converter_t {
 };
 
 inline void vima_converter_t::start_new_conversion() {
+#if VIMA_CONVERSION_DEBUG == 1
     printf("***************************************************\n");
     printf("Resetting vima converter to start new conversion...\n");
     printf("***************************************************\n");
+#endif
     this->iteration = 0;
     this->state_machine = 0;
     

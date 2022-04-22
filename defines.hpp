@@ -31,9 +31,8 @@
 #define HIVE_DEBUG 0
 #define VIMA_DEBUG 0
 #define DV_DEBUG 0
-#define VECTORIZE_AFTER 1
 #define UNIMPLEMENTED_ALERTS 0
-#define VIMA_CONVERSION_DEBUG 1
+#define VIMA_CONVERSION_DEBUG 0
 
 
 // ========================
@@ -49,7 +48,7 @@
 // =======================
 // Defines VIMA converter
 // =======================
-#define CONVERSION_BUFFER_SIZE 80
+#define CONVERSION_BUFFER_SIZE 32
 #define AVX_256_SIZE 32
 #define AVX_512_SIZE 64
 

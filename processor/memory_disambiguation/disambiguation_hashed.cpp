@@ -168,15 +168,9 @@ void disambiguation_hashed_t::solve_memory_dependences(memory_order_buffer_line_
 		}
 
 
-		if(mob_line->uop_number == 288) {
-			printf("288 removed dependency from %lu\n", mob_line->mem_deps_ptr_array[j]->uop_number);
-			printf("Remaining dependences before: %u\n", mob_line->mem_deps_ptr_array[j]->wait_mem_deps_number);
 
-		}
 		mob_line->mem_deps_ptr_array[j]->wait_mem_deps_number--;
-		if(mob_line->uop_number == 288) {
-			printf("Remaining dependences: %u\n", mob_line->mem_deps_ptr_array[j]->wait_mem_deps_number);
-		}
+
 		if (ADDRESS_TO_ADDRESS == 1) {
 			if (mob_line->mem_deps_ptr_array[j]->uop_executed == true &&
 				mob_line->mem_deps_ptr_array[j]->wait_mem_deps_number == 0 &&
