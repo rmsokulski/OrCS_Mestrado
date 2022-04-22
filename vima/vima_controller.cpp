@@ -313,6 +313,17 @@ void vima_controller_t::clock(){
     
     if (vima_buffer.size() <= 0) return;
 
+    // ******************************
+    // Remove old transactions status
+    // ******************************
+    while (this->CPU_transactions_status.get_size() > 0 && this->CPU_transactions_status[0].unique_conversion_id < vima_buffer[current_index]->unique_conversion_id) {
+        #if VIMA_DEBUG
+        printf("Popping id: %lu\n", this->CPU_transactions_status[0].unique_conversion_id);
+        #endif
+        this->CPU_transactions_status.pop_front();
+    }
+
+
     // Get CPU conversion status
     int8_t transaction_index = -1;
     for (uint8_t i=0; i < this->CPU_transactions_status.get_size(); ++i) {
@@ -322,22 +333,17 @@ void vima_controller_t::clock(){
         }
     }
 
+
     switch (vima_buffer[current_index]->status){
         case PACKAGE_STATE_WAIT:
             #if VIMA_DEBUG
-                ORCS_PRINTF ("%lu OUT VIMA %s -> %lu | processor: %u", orcs_engine.get_global_cycle(), get_enum_memory_operation_char (vima_buffer[current_index]->memory_operation), vima_buffer[current_index]->uop_number, vima_buffer[current_index]->processor_id)
+                ORCS_PRINTF ("%lu OUT VIMA [Conversion ID %lu] %s -> %lu | processor: %u", orcs_engine.get_global_cycle(), vima_buffer[current_index]->unique_conversion_id, get_enum_memory_operation_char (vima_buffer[current_index]->memory_operation), vima_buffer[current_index]->uop_number, vima_buffer[current_index]->processor_id)
                 if (vima_buffer[current_index]->vima_read1 != 0) ORCS_PRINTF (" | READ1: [%lu]", vima_buffer[current_index]->vima_read1)
                 if (vima_buffer[current_index]->vima_read2 != 0) ORCS_PRINTF (" | READ2: [%lu]", vima_buffer[current_index]->vima_read2)
                 if (vima_buffer[current_index]->vima_write != 0) ORCS_PRINTF (" | WRITE: [%lu]", vima_buffer[current_index]->vima_write)
                 ORCS_PRINTF ("\n")
             #endif
 
-            // ******************************
-            // Remove old transactions status
-            // ******************************
-            while (this->CPU_transactions_status.get_size() > 0 && this->CPU_transactions_status[0].unique_conversion_id <= vima_buffer[current_index]->unique_conversion_id) {
-                this->CPU_transactions_status.pop_front();
-            }
 
             this->instruction_ready (0);
             break;
@@ -370,7 +376,7 @@ void vima_controller_t::clock(){
                              this->CPU_transactions_status[transaction_index].readyAt < orcs_engine.get_global_cycle())
                     {
 #if VIMA_CONVERSION_DEBUG == 1
-                        printf("%lu VIMA discarding results after inform CPU %lu\n", orcs_engine.get_global_cycle(), orcs_engine.get_global_cycle() + 0);
+                        printf("%lu VIMA discarding results after inform CPU %lu [Conversion ID %lu]\n", orcs_engine.get_global_cycle(), orcs_engine.get_global_cycle() + 0, vima_buffer[current_index]->unique_conversion_id);
 #endif
                         vima_buffer[current_index]->updatePackageWait(0); // VIMA discard results
                     }
@@ -380,41 +386,55 @@ void vima_controller_t::clock(){
             }
             break;
         case PACKAGE_STATE_TRANSACTIONAL:
+        #if VIMA_DEBUG
+                ORCS_PRINTF ("%lu TRANSACTIONAL  VIMA [Conversion ID %lu] %s -> %lu readyAt: %lu/%lu", orcs_engine.get_global_cycle(), vima_buffer[current_index]->unique_conversion_id, get_enum_memory_operation_char (vima_buffer[current_index]->memory_operation), vima_buffer[current_index]->uop_number, vima_buffer[current_index]->readyAt, orcs_engine.get_global_cycle())
+                if (vima_buffer[current_index]->vima_read1 != 0) ORCS_PRINTF (" | READ1: [%lu]", vima_buffer[current_index]->vima_read1)
+                if (vima_buffer[current_index]->vima_read2 != 0) ORCS_PRINTF (" | READ2: [%lu]", vima_buffer[current_index]->vima_read2)
+                if (vima_buffer[current_index]->vima_write != 0) ORCS_PRINTF (" | WRITE: [%lu]", vima_buffer[current_index]->vima_write)
+                ORCS_PRINTF ("\n")
+            #endif
             // If VIMA operation was already completed
             if (vima_buffer[current_index]->readyAt <= orcs_engine.get_global_cycle()) {
 
                 // ***************************************************
                 // If before completion the conversion was invalidated 
                 // ***************************************************
-                if (transaction_index >= 0) {
-                    if (this->CPU_transactions_status[transaction_index].status == 2 /* Failure */ && 
-                        this->CPU_transactions_status[transaction_index].readyAt < orcs_engine.get_global_cycle())
+
+                    if ((transaction_index >= 0) && 
+                        (this->CPU_transactions_status[transaction_index].status == 2 /* Failure */ && 
+                         this->CPU_transactions_status[transaction_index].readyAt < orcs_engine.get_global_cycle()))
                     {
 #if VIMA_CONVERSION_DEBUG == 1
                         printf("%lu VIMA discarding results before inform CPU %lu [Conversion ID %lu]\n", orcs_engine.get_global_cycle(), orcs_engine.get_global_cycle() + 0, vima_buffer[current_index]->unique_conversion_id);
 #endif
                         vima_buffer[current_index]->updatePackageWait(0); // VIMA discard results
-                    } 
+                    }
                     // *********
                     // Otherwise
                     // *********
                     else {
 #if VIMA_CONVERSION_DEBUG == 1
-                        printf("%lu Transactional until %lu [Conversion ID %lu]\n", orcs_engine.get_global_cycle(), orcs_engine.get_global_cycle() + this->latency_burst, vima_buffer[current_index]->unique_conversion_id);
+                        printf("%lu Transactional [Conversion ID %lu] until %lu [Conversion ID %lu]\n", orcs_engine.get_global_cycle(), vima_buffer[current_index]->unique_conversion_id, orcs_engine.get_global_cycle() + this->latency_burst, vima_buffer[current_index]->unique_conversion_id);
 #endif
                         vima_buffer[current_index]->cpu_informed = false;
                         vima_buffer[current_index]->updatePackageConfirm(this->latency_burst);
                     }
-                }
             }
             break;
 
         case PACKAGE_STATE_TRANSMIT:
             this->check_completion(0);
+            #if VIMA_DEBUG
+                ORCS_PRINTF ("%lu TRANSMITTING  VIMA [Conversion ID %lu] %s -> %lu | processor: %u", orcs_engine.get_global_cycle(), vima_buffer[current_index]->unique_conversion_id, get_enum_memory_operation_char (vima_buffer[current_index]->memory_operation), vima_buffer[current_index]->uop_number, vima_buffer[current_index]->processor_id)
+                if (vima_buffer[current_index]->vima_read1 != 0) ORCS_PRINTF (" | READ1: [%lu]", vima_buffer[current_index]->vima_read1)
+                if (vima_buffer[current_index]->vima_read2 != 0) ORCS_PRINTF (" | READ2: [%lu]", vima_buffer[current_index]->vima_read2)
+                if (vima_buffer[current_index]->vima_write != 0) ORCS_PRINTF (" | WRITE: [%lu]", vima_buffer[current_index]->vima_write)
+                ORCS_PRINTF ("\n")
+            #endif
             break;
         case PACKAGE_STATE_VIMA:
             #if VIMA_DEBUG
-                ORCS_PRINTF ("%lu IN  VIMA %s -> %lu | processor: %u", orcs_engine.get_global_cycle(), get_enum_memory_operation_char (vima_buffer[current_index]->memory_operation), vima_buffer[current_index]->uop_number, vima_buffer[current_index]->processor_id)
+                ORCS_PRINTF ("%lu IN  VIMA [Conversion ID %lu] %s -> %lu | processor: %u", orcs_engine.get_global_cycle(), vima_buffer[current_index]->unique_conversion_id, get_enum_memory_operation_char (vima_buffer[current_index]->memory_operation), vima_buffer[current_index]->uop_number, vima_buffer[current_index]->processor_id)
                 if (vima_buffer[current_index]->vima_read1 != 0) ORCS_PRINTF (" | READ1: [%lu]", vima_buffer[current_index]->vima_read1)
                 if (vima_buffer[current_index]->vima_read2 != 0) ORCS_PRINTF (" | READ2: [%lu]", vima_buffer[current_index]->vima_read2)
                 if (vima_buffer[current_index]->vima_write != 0) ORCS_PRINTF (" | WRITE: [%lu]", vima_buffer[current_index]->vima_write)

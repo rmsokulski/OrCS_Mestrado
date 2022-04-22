@@ -175,7 +175,7 @@ processor_t::processor_t()
 	this->DISPATCH_DEBUG = 0;
 	this->EXECUTE_DEBUG = 0;
 	this->HIVE_DEBUG = 0;
-	this->VIMA_DEBUGG = 0;
+	this->VIMA_DEBUG = 0;
 	this->COMMIT_DEBUG = 0;*/
 
 	this->WAIT_CYCLE = 0;
@@ -1394,7 +1394,7 @@ void processor_t::decode()
 					ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
 #endif
 
-#if VIMA_DEBUGG
+#if VIMA_DEBUG
 				ORCS_PRINTF("%lu Processor decode(): VIMA instruction %lu decoded!\n",
 							orcs_engine.get_global_cycle(), this->fetchBuffer.front()->opcode_number)
 #endif
@@ -1833,6 +1833,10 @@ void processor_t::rename()
 			break;
 		}
 
+
+
+
+
 		// *************************************************
 		// Avalia se a uop pode fazer parte de uma conversão
 		// *************************************************
@@ -1841,6 +1845,48 @@ void processor_t::rename()
 		} else {
 			origin_buffer = &this->vima_converter.vima_instructions_buffer;
 		}
+
+		// **********************************************************************
+		// Verifica se tem espaço antes de avaliar a instrução
+		// (para evitar invalidações entre uma avaliação e sua entrada no rob :p)
+		// Verifica se há espaço na URSs
+		// **********************************************************************
+		
+		if (this->unified_reservation_station.size() == this->unified_reservation_station.capacity()) {
+			break;
+		}
+
+		// ==============
+		// All operations
+		// ==============
+		if (reorderBuffer.robUsed >= ROB_SIZE) {
+			break;
+		}
+
+		//=======================
+		// Memory Operation Read
+		//=======================
+		if (origin_buffer->front()->uop_operation == INSTRUCTION_OPERATION_MEM_LOAD)
+		{
+
+			if (this->memory_order_buffer_read_used >= MOB_READ || reorderBuffer.robUsed >= ROB_SIZE)
+			{
+				break;
+			}
+
+		}
+
+		//=======================
+		// Memory Operation Write
+		//=======================
+		if (origin_buffer->front()->uop_operation == INSTRUCTION_OPERATION_MEM_STORE)
+		{
+			if (this->memory_order_buffer_write_used >= MOB_READ || reorderBuffer.robUsed >= ROB_SIZE)
+			{
+				break;
+			}
+		}
+
 
 		// LOAD AVX
 		uop_package_t *uop = origin_buffer->front();
@@ -2415,7 +2461,7 @@ void processor_t::rename()
 					break;
 				else
 				{
-					#if VIMA_DEBUGG
+					#if VIMA_DEBUG
 					ORCS_PRINTF("%lu Processor rename(): memory_order_buffer_vima used = %u.\n",
 								orcs_engine.get_global_cycle(),
 								this->memory_order_buffer_vima_used);
@@ -2768,7 +2814,7 @@ void processor_t::rename()
 			rob_line->mob_base[rob_line->pos_mob].rob_ptr = rob_line;
 			//mob_line->rob_ptr = rob_line;
 
-#if VIMA_DEBUGG
+#if VIMA_DEBUG
 			ORCS_PRINTF("%lu Processor rename(): VIMA instruction %lu uop %lu renamed!\n",
 						orcs_engine.get_global_cycle(),
 						rob_line->uop.opcode_number,
@@ -2971,7 +3017,7 @@ void processor_t::clean_mob_vima()
 			this->memory_order_buffer_vima[pos].readyAt <= orcs_engine.get_global_cycle() &&
 			this->memory_order_buffer_vima[pos].processed == false)
 		{
-#if VIMA_DEBUGG
+#if VIMA_DEBUG
 			ORCS_PRINTF("%lu Processor clean_mob_vima(): memory_vima_executed %u, processor %lu ", orcs_engine.get_global_cycle(), this->memory_vima_executed, this->processor_id)
 #endif
 			this->memory_order_buffer_vima[pos].rob_ptr->stage = PROCESSOR_STAGE_COMMIT;
@@ -2983,7 +3029,7 @@ void processor_t::clean_mob_vima()
 			{
 				this->disambiguator->solve_memory_dependences(&this->memory_order_buffer_vima[pos]);
 			}
-#if VIMA_DEBUGG
+#if VIMA_DEBUG
 			ORCS_PRINTF("VIMA instruction %lu %s, %u!\n", this->memory_order_buffer_vima[pos].uop_number, get_enum_processor_stage_char(this->memory_order_buffer_vima[pos].rob_ptr->stage), this->memory_order_buffer_vima[pos].readyAt)
 #endif
 		}
@@ -3181,7 +3227,7 @@ void processor_t::execute()
 				this->unified_functional_units.shrink_to_fit();
 				i--;
 
-#if VIMA_DEBUGG
+#if VIMA_DEBUG
 				ORCS_PRINTF("%lu Processor execute(): VIMA instruction %lu executed!\n", orcs_engine.get_global_cycle(), rob_line->uop.uop_number)
 #endif
 			}
@@ -3843,12 +3889,12 @@ void processor_t::conversion_invalidation(uint64_t unique_conversion_id)
 		reorder_buffer_line_t *rob_line = &rob->reorderBuffer[pos];
 		if (rob_line->stage == PROCESSOR_STAGE_WAITING_DYN && rob_line->uop.unique_conversion_id == unique_conversion_id) {
 			rob_line->stage = PROCESSOR_STAGE_RENAME;
-			this->vima_converter.instructions_reexecuted++;
-
+			
 			// Insert in URS
 			if ((rob_line->uop.uop_operation != INSTRUCTION_OPERATION_MEM_LOAD) &&
 		   		(rob_line->uop.uop_operation != INSTRUCTION_OPERATION_MEM_STORE)) {
 				this->unified_reservation_station.push_back(rob_line);
+				this->vima_converter.instructions_reexecuted++;
 		   }
 		}
 	}
@@ -3963,6 +4009,7 @@ void processor_t::commit()
 						rob->robUsed);
 		}
 		*/
+		
 
 		if ((rob->robUsed != 0) &&
 			rob_line->stage == PROCESSOR_STAGE_COMMIT &&
@@ -4032,7 +4079,7 @@ void processor_t::commit()
 			case INSTRUCTION_OPERATION_VIMA_GATHER:
 			case INSTRUCTION_OPERATION_VIMA_SCATTER:
 				this->add_stat_inst_vima_completed();
-#if VIMA_DEBUGG
+#if VIMA_DEBUG
 				ORCS_PRINTF("%lu Processor commit(): instruction VIMA %lu, %s committed, readyAt %lu.\n",
 							orcs_engine.get_global_cycle(),
 							rob_line->uop.uop_number,
@@ -4187,6 +4234,23 @@ void processor_t::commit()
 								rob_line->uop.unique_conversion_id, this->vima_converter.current_conversion->unique_conversion_id);
 					}
 					*/
+					
+
+				// A instrução VIMA está travada no estágio de execute porque a VIMA não consegue decidir se
+				// armazena ou joga fora o seu resultado enquanto a CPU não responder.
+				// Assim ela não pode comitar nem desfazer a conversão pela regra acima.
+				 if ((rob->SIZE == rob->robUsed) &&
+					(this->vima_converter.iteration <= this->vima_converter.current_conversion->conversion_ending) &&
+					rob_line->stage == PROCESSOR_STAGE_EXECUTION && 
+					rob_line->uop.is_vima &&
+					this->vima_converter.current_conversion->VIMA_requirements_meet &&
+					rob_line->uop.unique_conversion_id == this->vima_converter.current_conversion->unique_conversion_id)
+					{
+#if VIMA_CONVERSION_DEBUG == 1
+						printf("INVALIDATION: ROB full but not enough iterations inside, freeing VIMA\n");
+#endif	
+						this->vima_converter.invalidate_conversion(this->vima_converter.current_conversion);
+					}
 
 
 				// Verifica se está travado porque acabaram as instruções até o rename sem completar as iterações
@@ -4197,7 +4261,9 @@ void processor_t::commit()
 					(rob_line->uop.ignore_on_conversion_success || rob_line->uop.is_vima) && // Não era uma das de cálculo do endereço
 					this->vima_converter.iteration <= 
 					this->vima_converter.current_conversion->conversion_ending) {
+#if VIMA_CONVERSION_DEBUG == 1
 						printf("INVALIDATION: Not enough instructions remaining to complete the conversion\n");
+#endif	
 						this->vima_converter.invalidate_conversion(this->vima_converter.current_conversion);
 					}
 
