@@ -14,6 +14,7 @@ class conversion_status_t {
         bool vima_sent;
         bool CPU_requirements_meet;
         bool VIMA_requirements_meet;
+        uint64_t VIMA_requirements_meet_readyAt;
 
         bool entry_can_be_removed; // Indicative that the operations related with this conversion are completed
 
@@ -37,6 +38,7 @@ class conversion_status_t {
             this->vima_sent = false;
             this->CPU_requirements_meet = false;
             this->VIMA_requirements_meet = false;
+            this->VIMA_requirements_meet_readyAt = 0;
 
             this->entry_can_be_removed = false;
 
@@ -195,7 +197,7 @@ class vima_converter_t {
         void get_index_for_alignment(conversion_status_t * current_conversion, uint32_t access_size);
 
         // Completed execution
-        void vima_execution_completed(memory_package_t *vima_package);
+        void vima_execution_completed(memory_package_t *vima_package, uint64_t readyAt);
 
 
         // Statistics
@@ -251,6 +253,7 @@ inline void vima_converter_t::start_new_conversion() {
         this->current_conversion->vima_sent = false;
         this->current_conversion->CPU_requirements_meet = false;
         this->current_conversion->VIMA_requirements_meet = false;
+        this->current_conversion->VIMA_requirements_meet_readyAt = 0;
 
     }
     // *******************************

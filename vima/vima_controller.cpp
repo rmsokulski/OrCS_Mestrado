@@ -265,6 +265,9 @@ void vima_controller_t::clock(){
         }
     }
 
+
+    // TODO -> falta garantir que a VIMA comite apenas depois da confirmação das CPU
+    // mesmo com isso devemos poder executar outras VIMAs enquanto isso
     uint32_t index = 0;
     for (uint32_t i = 0; i < vima_buffer_count; i++){
         index = (vima_buffer_start + i) % VIMA_BUFFER;
@@ -279,44 +282,6 @@ void vima_controller_t::clock(){
                 ORCS_PRINTF ("\n")
                 #endif
                 this->instruction_ready (index);
-                break;
-            case PACKAGE_STATE_CONFIRM:
-                // The CPU is informed and the last iteration data is sent from VIMA to CPU
-                if (vima_buffer[index]->readyAt <= orcs_engine.get_global_cycle()) { // CPU data arriving
-                    // **********
-                    // Inform CPU
-                    // **********
-                    if (vima_buffer[index]->cpu_informed == false) {
-    #if VIMA_CONVERSION_DEBUG == 1
-                        printf("%lu VIMA informing CPU... [Conversion ID %lu]\n", orcs_engine.get_global_cycle(), vima_buffer[index]->unique_conversion_id);
-    #endif
-                        orcs_engine.processor->vima_converter.vima_execution_completed(vima_buffer[index]);
-                        vima_buffer[index]->cpu_informed = true;
-                    }
-                    // *****************************************
-                    // Check if already has the CPU confirmation
-                    // *****************************************
-                    if (transaction_index >= 0) {
-                        if (this->CPU_transactions_status[transaction_index].status == 1 /* Success */ && 
-                            this->CPU_transactions_status[transaction_index].readyAt < orcs_engine.get_global_cycle())
-                        {
-    #if VIMA_CONVERSION_DEBUG == 1
-                            printf("%lu VIMA sending last loads and operation result %lu [Conversion ID %lu]\n", orcs_engine.get_global_cycle(), orcs_engine.get_global_cycle() + this->latency_burst * 3, vima_buffer[index]->unique_conversion_id);
-    #endif
-                            vima_buffer[index]->updatePackageWait(this->latency_burst * 3); // VIMA data sent to CPU
-                        } 
-                        else if (this->CPU_transactions_status[transaction_index].status == 2 /* Failure */ && 
-                                 this->CPU_transactions_status[transaction_index].readyAt < orcs_engine.get_global_cycle())
-                        {
-    #if VIMA_CONVERSION_DEBUG == 1
-                            printf("%lu VIMA discarding results after inform CPU %lu [Conversion ID %lu]\n", orcs_engine.get_global_cycle(), orcs_engine.get_global_cycle() + 0, vima_buffer[index]->unique_conversion_id);
-    #endif
-                            vima_buffer[index]->updatePackageWait(1); // VIMA discard results
-                        }
-                    }
-
-
-                }
                 break;
             case PACKAGE_STATE_TRANSACTIONAL:
             #if VIMA_DEBUG
@@ -349,8 +314,13 @@ void vima_controller_t::clock(){
     #if VIMA_CONVERSION_DEBUG == 1
                             printf("%lu Transactional [Conversion ID %lu] until %lu [Conversion ID %lu]\n", orcs_engine.get_global_cycle(), vima_buffer[index]->unique_conversion_id, orcs_engine.get_global_cycle() + this->latency_burst, vima_buffer[index]->unique_conversion_id);
     #endif
-                            vima_buffer[index]->cpu_informed = false;
-                            vima_buffer[index]->updatePackageConfirm(this->latency_burst);
+    #if VIMA_CONVERSION_DEBUG == 1
+                        printf("%lu VIMA informing CPU... [Conversion ID %lu]\n", orcs_engine.get_global_cycle(), vima_buffer[index]->unique_conversion_id);
+    #endif
+                            orcs_engine.processor->vima_converter.vima_execution_completed(vima_buffer[index], this->latency_burst);
+                            vima_buffer[index]->cpu_informed = true;
+
+                            vima_buffer[index]->updatePackageWait(1); // VIMA data sent to CPU -> Considering that was sent with the confirmation to the CPU
                         }
                 }
                 break;

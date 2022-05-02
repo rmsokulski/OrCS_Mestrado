@@ -3770,7 +3770,9 @@ void processor_t::check_conversion()
 		}
 
 
-		if (this->vima_converter.current_conversions[conversion_index].CPU_requirements_meet && this->vima_converter.current_conversions[conversion_index].VIMA_requirements_meet)
+		if (this->vima_converter.current_conversions[conversion_index].CPU_requirements_meet && 
+		    this->vima_converter.current_conversions[conversion_index].VIMA_requirements_meet &&
+			this->vima_converter.current_conversions[conversion_index].VIMA_requirements_meet_readyAt <= orcs_engine.get_global_cycle())
 		{
 			this->vima_converter.conversion_successful++;
 
@@ -4236,6 +4238,7 @@ void processor_t::commit()
 					rob_line->stage == PROCESSOR_STAGE_EXECUTION && 
 					rob_line->uop.is_vima &&
 					this->vima_converter.current_conversion->VIMA_requirements_meet &&
+					this->vima_converter.current_conversion->VIMA_requirements_meet_readyAt <= orcs_engine.get_global_cycle() &&
 					rob_line->uop.unique_conversion_id == this->vima_converter.current_conversion->unique_conversion_id)
 					{
 #if VIMA_CONVERSION_DEBUG == 1
