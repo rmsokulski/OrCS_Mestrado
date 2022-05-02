@@ -37,6 +37,7 @@ class vima_converter_t {
         bool vima_sent;
         bool CPU_requirements_meet;
         bool VIMA_requirements_meet;
+        uint64_t VIMA_requirements_meet_readyAt;
 
 
 
@@ -87,10 +88,11 @@ class vima_converter_t {
             this->vima_sent = false;
             this->CPU_requirements_meet = false;
             this->VIMA_requirements_meet = false;
+            this->VIMA_requirements_meet_readyAt = 0;
             this->vima_instructions_buffer.allocate(1);
             this->infos_remaining = 0;
             this->unique_conversion_id = 1;
-	    this->is_mov = false;
+	        this->is_mov = false;
 
             // Write register control
             for (uint32_t i=0; i < 259; ++i) regs_list[i] = false;
@@ -144,7 +146,7 @@ class vima_converter_t {
         void get_index_for_alignment(uint32_t access_size);
 
         // Completed execution
-        void vima_execution_completed(memory_package_t *vima_package);
+        void vima_execution_completed(memory_package_t *vima_package, uint64_t readyAt);
 
 
         // Statistics

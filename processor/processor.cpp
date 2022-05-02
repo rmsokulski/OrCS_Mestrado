@@ -2555,9 +2555,6 @@ void processor_t::rename()
 				rob_line->mob_base[pos].uop_number = rob_line->uop.uop_number;
 				rob_line->mob_base[pos].processor_id = this->processor_id;
 				rob_line->waiting_mem_request++;
-				if (rob_line->uop.uop_number == 288) {
-					printf("Mob line: %u\n", pos);
-				}
 			}
 
 			/*if (rob_line->uop.uop_number == 319) {
@@ -3747,7 +3744,7 @@ uint32_t processor_t::mob_write()
 
 void processor_t::check_conversion()
 {
-	if (this->vima_converter.CPU_requirements_meet && this->vima_converter.VIMA_requirements_meet)
+	if (this->vima_converter.CPU_requirements_meet && this->vima_converter.VIMA_requirements_meet && this->vima_converter.VIMA_requirements_meet_readyAt < orcs_engine.get_global_cycle())
 	{
 		this->vima_converter.conversion_successful++;
 
@@ -3835,6 +3832,7 @@ void processor_t::conversion_invalidation()
 		reorder_buffer_line_t *rob_line = &rob->reorderBuffer[pos];
 		if (rob_line->stage == PROCESSOR_STAGE_WAITING_DYN) {
 			rob_line->stage = PROCESSOR_STAGE_RENAME;
+			rob_line->uop.reexecuted = true;
 			
 			// Insert in URS
 			if ((rob_line->uop.uop_operation != INSTRUCTION_OPERATION_MEM_LOAD) &&
@@ -3916,8 +3914,8 @@ void processor_t::commit()
 			this->check_conversion();
 		}
 		
-		
-		/*if (rob->robUsed != 0 && (rob_line->uop.uop_operation == INSTRUCTION_OPERATION_MEM_LOAD || rob_line->uop.uop_operation == INSTRUCTION_OPERATION_MEM_STORE)) {
+		/*
+		if (orcs_engine.get_global_cycle() > 900000 && rob->robUsed != 0 && (rob_line->uop.uop_operation == INSTRUCTION_OPERATION_MEM_LOAD || rob_line->uop.uop_operation == INSTRUCTION_OPERATION_MEM_STORE)) {
 			uint32_t pos = (rob_line->pos_mob + 0) % rob_line->mob_limit;
 		
 			ORCS_PRINTF("%lu Ignored: %s Stage: %d (AGU executed: %s - Processed: %s [pos: %u] - Sent: %s): uop %lu %s, readyAt %lu, fetchBuffer: %u, decodeBuffer: %u, robUsed: %u.\n",
@@ -3934,9 +3932,10 @@ void processor_t::commit()
 						this->fetchBuffer.get_size(),
 						this->decodeBuffer.get_size(),
 						rob->robUsed);
-		} else {
-			ORCS_PRINTF("%lu Ignored: %s Stage: %d: uop %lu %s, readyAt %lu, fetchBuffer: %u, decodeBuffer: %u, robUsed: %u.\n",
+		} else if (orcs_engine.get_global_cycle() > 900000){
+			ORCS_PRINTF("%lu [Conversion ID: %lu] Ignored: %s Stage: %d: uop %lu %s, readyAt %lu, fetchBuffer: %u, decodeBuffer: %u, robUsed: %u.\n",
 						orcs_engine.get_global_cycle(),
+						rob_line->uop.unique_conversion_id,
 						(rob_line->uop.ignore_on_conversion_success) ? "true" : "false",
 						rob_line->stage,
 						rob_line->uop.uop_number,
@@ -4112,7 +4111,8 @@ void processor_t::commit()
 				if (rob->reorderBuffer[rob->robStart].uop.uop_operation == INSTRUCTION_OPERATION_MEM_LOAD)
 				{
 					this->remove_front_mob_read(rob->reorderBuffer[rob->robStart].uop.num_mem_operations);
-					if (rob->reorderBuffer[rob->robStart].uop.ignore_on_conversion_success) {
+					if (rob->reorderBuffer[rob->robStart].uop.ignore_on_conversion_success &&
+					    !rob->reorderBuffer[rob->robStart].uop.reexecuted) {
 						this->memory_read_executed -= rob->reorderBuffer[rob->robStart].uop.num_mem_operations;
 					}
 				
@@ -4151,7 +4151,8 @@ void processor_t::commit()
 			reorder_buffer_line_t *rob_line = &rob->reorderBuffer[pos_buffer];
 			if ((rob->SIZE == rob->robUsed) &&
 				(this->vima_converter.iteration <= this->vima_converter.conversion_ending) &&
-				(rob_line->stage == PROCESSOR_STAGE_WAITING_DYN))
+				(rob_line->stage == PROCESSOR_STAGE_WAITING_DYN) &&
+				rob_line->uop.unique_conversion_id == this->vima_converter.unique_conversion_id)
 				{
 #if VIMA_CONVERSION_DEBUG == 1
 					printf("INVALIDATION: ROB full but not enough iterations inside\n");
@@ -4179,7 +4180,9 @@ void processor_t::commit()
 			if (this->traceIsOver &&
 				this->fetchBuffer.is_empty() &&
 				this->decodeBuffer.is_empty() &&
-				this->vima_converter.iteration < this->vima_converter.conversion_ending) {
+				rob_line->uop.unique_conversion_id == this->vima_converter.unique_conversion_id && // Para não ficar travando a mesma vima enquanto ela tenta esperar a invalidação d mem 3D
+				((rob_line->uop.ignore_on_conversion_success && (!rob_line->uop.reexecuted)) || rob_line->uop.is_vima) && // Não era uma das de cálculo do endereço
+				this->vima_converter.iteration <= this->vima_converter.conversion_ending) {
 #if VIMA_CONVERSION_DEBUG == 1
 					printf("INVALIDATION: Not enough instructions remaining to complete the conversion\n");
 #endif

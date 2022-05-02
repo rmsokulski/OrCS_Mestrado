@@ -19,16 +19,23 @@ class vima_controller_t {
         vima_vector_t* read2_unbalanced;
         vima_vector_t* write;
         vima_vector_t* write_unbalanced;
-        std::vector<memory_package_t*> vima_buffer;
-        std::vector<memory_package_t*> sub_request_queue;
-        std::vector<vima_vector_t*> working_vectors;
+        memory_package_t** vima_buffer;
         
+        uint32_t vima_buffer_start;
+        uint32_t vima_buffer_end;
+        uint32_t vima_buffer_count;
+        uint16_t* store_hash;
+        uint32_t bits_shift;
+
+        bool read1_d, read2_d, write_d;
 
         // Transactions controller
         uint8_t CPU_confirmed_transaction; // 0 -> Esperando CPU
                                            // 1 -> Sucesso
                                            // 2 -> FALHA
         uint64_t CPU_confirmation_readyAt;
+
+        uint64_t unique_conversion_id;
 
         uint64_t index_bits_mask;
         uint64_t index_bits_shift;
@@ -47,12 +54,10 @@ class vima_controller_t {
         uint64_t current_index;
         uint64_t request_count;
         uint64_t total_wait;
-
         // Communications
         uint32_t BURST_WIDTH;
         uint32_t LINE_SIZE;
         uint32_t latency_burst;
-
 
         INSTANTIATE_GET_SET_ADD (uint32_t, VIMA_BUFFER)
         INSTANTIATE_GET_SET_ADD (uint32_t, VIMA_VECTOR_SIZE)
@@ -76,10 +81,8 @@ class vima_controller_t {
         INSTANTIATE_GET_SET_ADD (uint64_t, cache_writebacks)
         
         void print_vima_instructions();
-        void check_cache (int index);
         vima_vector_t* search_cache (uint64_t address, cache_status_t* result);
         void check_completion (int index);
-        void write_to_cache (int index);
         
         // Get channel to access DATA
         inline uint64_t get_index(uint64_t addr) {
@@ -99,10 +102,11 @@ class vima_controller_t {
         void instruction_ready (size_t index);
         void statistics();
         void reset_statistics();
-        inline void confirm_transaction(uint8_t status);
+        inline void confirm_transaction(uint8_t status, uint64_t unique_transaction_id);
 };
 
-inline void vima_controller_t::confirm_transaction(uint8_t status) {
+inline void vima_controller_t::confirm_transaction(uint8_t status, uint64_t unique_conversion_id) {
+    this->unique_conversion_id = unique_conversion_id;
     this->CPU_confirmed_transaction = status;
     this->CPU_confirmation_readyAt = orcs_engine.get_global_cycle() + this->latency_burst;
 }

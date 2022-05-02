@@ -43,6 +43,7 @@ class uop_package_t{
                                 // 3 -> Store
     uint64_t unique_conversion_id;
     bool ignore_on_conversion_success;
+    bool reexecuted;
     int64_t linked_to_iteration; // Caso esteja sendo ignorada, uma instrução precisa confirmar seu endereço com a AGU e o VC
                                   // então essa variável indica a iteração a ser utilizada para a validação do endereço
 

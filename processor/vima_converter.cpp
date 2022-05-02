@@ -143,15 +143,15 @@ void vima_converter_t::AGU_result(uop_package_t *uop) {
 #endif
                 if (this->mem_addr_confirmations_remaining == 0) {
 #if VIMA_CONVERSION_DEBUG
-                    printf("**************************\n");
-                    printf("CPU requirements achieved!\n");
-                    printf("**************************\n");
+                    printf("***********************************************\n");
+                    printf("CPU requirements achieved! [conversion ID: %lu]\n", this->unique_conversion_id);
+                    printf("***********************************************\n");
 #endif
                     this->CPU_requirements_meet = true;
 #if VIMA_CONVERSION_DEBUG
-                    printf("%lu CPU informing VIMA...\n", orcs_engine.get_global_cycle());
-#endif
-                    orcs_engine.vima_controller->confirm_transaction(1 /* Success */);
+                    printf("%lu CPU informing VIMA...[conversion ID: %lu]\n", orcs_engine.get_global_cycle(), this->unique_conversion_id);
+#endif                    
+		     orcs_engine.vima_controller->confirm_transaction(1 /* Success */, this->unique_conversion_id);
                 }
             } else {
                 invalidate_conversion();
@@ -190,7 +190,7 @@ void vima_converter_t::get_index_for_alignment(uint32_t access_size) {
 
 // TODO
 // Get data from VIMA and set registers with it before meet the requirements
-void vima_converter_t::vima_execution_completed(memory_package_t *vima_package) {
+void vima_converter_t::vima_execution_completed(memory_package_t *vima_package, uint64_t readyAt) {
 #if VIMA_CONVERSION_DEBUG
     printf("***************************\n");
     printf("VIMA requirements achieved! (%lu == %lu)\n", this->unique_conversion_id, vima_package->unique_conversion_id);
@@ -198,6 +198,7 @@ void vima_converter_t::vima_execution_completed(memory_package_t *vima_package) 
 #endif
     if (this->unique_conversion_id == vima_package->unique_conversion_id) {
         this->VIMA_requirements_meet = true;
+	    this->VIMA_requirements_meet_readyAt = readyAt;
     }
 }
 
@@ -221,7 +222,7 @@ void vima_converter_t::invalidate_conversion() {
     // *************************************
     // Avisa VIMA para descartar o resultado
     // *************************************
-    orcs_engine.vima_controller->confirm_transaction(2 /* Failure */);
+    orcs_engine.vima_controller->confirm_transaction(2 /* Failure */, this->unique_conversion_id);
 
 
     // ******************************
