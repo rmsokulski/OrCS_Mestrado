@@ -22,6 +22,7 @@ void uop_package_t::package_clean()
     this->ignore_on_conversion_success = false;
     this->linked_to_iteration = -1;
     this->already_sent = false;
+    this->reexecuted = false;
 
     
 
@@ -92,6 +93,7 @@ void uop_package_t::opcode_to_uop(
     this->ignore_on_conversion_success = false;
     this->linked_to_iteration = -1;
     this->already_sent = false;
+    this->reexecuted = false;
 
 
     memcpy(this->read_regs, opcode.read_regs, sizeof(int32_t) * MAX_REGISTERS);

@@ -35,7 +35,9 @@ void vima_converter_t::generate_VIMA_instruction(conversion_status_t *conversion
 								this->mem_operation_latency, this->mem_operation_wait_next, this->mem_operation_fu,
 								base_opcode, 0, false);
 		base_uop.add_memory_operation(0, 1);
-
+#if VIMA_CONVERSION_DEBUG
+        printf("Generating VIMA instruction with ID: %lu\n", conversion_data->unique_conversion_id);
+#endif
 		base_uop.unique_conversion_id = conversion_data->unique_conversion_id;
 		base_uop.is_hive = false;
 		base_uop.hive_read1 = -1;
@@ -173,13 +175,13 @@ void vima_converter_t::AGU_result(uop_package_t *uop) {
 #endif
                 if (this->current_conversions[conversion_index].mem_addr_confirmations_remaining == 0) {
 #if VIMA_CONVERSION_DEBUG == 1
-                    printf("**************************\n");
-                    printf("CPU requirements achieved!\n");
-                    printf("**************************\n");
+                    printf("**********************************************\n");
+                    printf("CPU requirements achieved! [Conversion ID %lu]\n", this->current_conversions[conversion_index].unique_conversion_id);
+                    printf("*********************************************\n");
 #endif
                     this->current_conversions[conversion_index].CPU_requirements_meet = true;
 #if VIMA_CONVERSION_DEBUG == 1
-                    printf("%lu CPU informing VIMA...\n", orcs_engine.get_global_cycle());
+                    printf("%lu CPU informing VIMA... [Conversion ID %lu]\n", orcs_engine.get_global_cycle(), this->current_conversions[conversion_index].unique_conversion_id);
 #endif
                     orcs_engine.vima_controller->confirm_transaction(1 /* Success */, this->current_conversions[conversion_index].unique_conversion_id);
                 }
