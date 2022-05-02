@@ -227,11 +227,11 @@ if (access_size == AVX_256_SIZE) {
 
 // TODO
 // Get data from VIMA and set registers with it before meet the requirements
-void vima_converter_t::vima_execution_completed(memory_package_t *vima_package) {
+void vima_converter_t::vima_execution_completed(memory_package_t *vima_package, uint64_t readyAt) {
 #if VIMA_CONVERSION_DEBUG == 1
-    printf("***************************\n");
-    printf("VIMA requirements achieved! [Conversion ID %lu]\n", vima_package->unique_conversion_id);
-    printf("***************************\n");
+    printf("******************************************************\n");
+    printf("VIMA requirements achieved! [Conversion ID %lu] in %lu\n", vima_package->unique_conversion_id, readyAt);
+    printf("******************************************************\n");
 #endif
 
     // ***************
@@ -247,6 +247,7 @@ void vima_converter_t::vima_execution_completed(memory_package_t *vima_package) 
 
     if (conversion_index >= 0) {
         this->current_conversions[conversion_index].VIMA_requirements_meet = true;
+        this->current_conversions[conversion_index].VIMA_requirements_meet_readyAt = readyAt;
     }
 }
 
@@ -372,6 +373,7 @@ void vima_converter_t::continue_conversion(conversion_status_t *prev_conversion)
         this->current_conversion->vima_sent = false;
         this->current_conversion->CPU_requirements_meet = false;
         this->current_conversion->VIMA_requirements_meet = false;
+        this->current_conversion->VIMA_requirements_meet_readyAt = 0;
 
 	if (prev_conversion->mem_size == AVX_256_SIZE) {
         	this->current_conversion->base_mem_addr[0] = prev_conversion->base_mem_addr[0] + (prev_conversion->mem_size * this->necessary_AVX_256_iterations_to_one_vima);
