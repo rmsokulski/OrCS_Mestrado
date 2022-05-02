@@ -2282,7 +2282,9 @@ void processor_t::rename()
 					}
 
 				} else if (all_written && this->vima_converter.state_machine != 3 && this->vima_converter.state_machine != 1) {
+#if VIMA_CONVERSION_DEBUG
 					printf("  Pattern changed, unexpected store: \n");
+#endif
 					invalidate = true;
 				}
 			}
@@ -2578,9 +2580,6 @@ void processor_t::rename()
 				rob_line->mob_base[pos].uop_number = rob_line->uop.uop_number;
 				rob_line->mob_base[pos].processor_id = this->processor_id;
 				rob_line->waiting_mem_request++;
-				if (rob_line->uop.uop_number == 288) {
-					printf("Mob line: %u\n", pos);
-				}
 			}
 
 			/*if (rob_line->uop.uop_number == 319) {
@@ -3880,6 +3879,7 @@ void processor_t::conversion_invalidation(uint64_t unique_conversion_id)
 		reorder_buffer_line_t *rob_line = &rob->reorderBuffer[pos];
 		if (rob_line->stage == PROCESSOR_STAGE_WAITING_DYN && rob_line->uop.unique_conversion_id == unique_conversion_id) {
 			rob_line->stage = PROCESSOR_STAGE_RENAME;
+			rob_line->uop.reexecuted = true;
 			
 			// Insert in URS
 			if ((rob_line->uop.uop_operation != INSTRUCTION_OPERATION_MEM_LOAD) &&
@@ -4166,7 +4166,8 @@ void processor_t::commit()
 				if (rob->reorderBuffer[rob->robStart].uop.uop_operation == INSTRUCTION_OPERATION_MEM_LOAD)
 				{
 					this->remove_front_mob_read(rob->reorderBuffer[rob->robStart].uop.num_mem_operations);
-					if (rob->reorderBuffer[rob->robStart].uop.ignore_on_conversion_success) {
+					if (rob->reorderBuffer[rob->robStart].uop.ignore_on_conversion_success &&
+					    !rob->reorderBuffer[rob->robStart].uop.reexecuted) {
 						this->memory_read_executed -= rob->reorderBuffer[rob->robStart].uop.num_mem_operations;
 					}
 				
@@ -4249,7 +4250,7 @@ void processor_t::commit()
 					this->fetchBuffer.is_empty() &&
 					this->decodeBuffer.is_empty() &&
 					rob_line->uop.unique_conversion_id == this->vima_converter.current_conversion->unique_conversion_id && // Tem uma instrução da conversão tentando comittar
-					(rob_line->uop.ignore_on_conversion_success || rob_line->uop.is_vima) && // Não era uma das de cálculo do endereço
+					((rob_line->uop.ignore_on_conversion_success && (!rob_line->uop.reexecuted)) || rob_line->uop.is_vima) && // Não era uma das de cálculo do endereço
 					this->vima_converter.iteration <= 
 					this->vima_converter.current_conversion->conversion_ending) {
 #if VIMA_CONVERSION_DEBUG == 1

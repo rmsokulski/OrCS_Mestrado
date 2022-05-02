@@ -89,7 +89,7 @@ static uint32_t process_argv(int argc, char **argv) {
     return NUMBER_OF_PROCESSORS;
 }
 
-std::string get_status_execution(uint32_t NUMBER_OF_PROCESSORS){   
+std::string get_status_execution(uint32_t NUMBER_OF_PROCESSORS){
     std::string final_report;
     char report[1000];
     // Data - Atual,total, active cores

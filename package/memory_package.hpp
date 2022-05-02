@@ -26,8 +26,11 @@ class memory_package_t {
 
         bool is_vima;
         uint64_t vima_read1;
+        vima_vector_t* vima_read1_vec;
         uint64_t vima_read2;
+        vima_vector_t* vima_read2_vec;
         uint64_t vima_write;
+        vima_vector_t* vima_write_vec;
         uint64_t unique_conversion_id;
 
         bool row_buffer;

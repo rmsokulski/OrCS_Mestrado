@@ -32,10 +32,15 @@ class vima_controller_t {
         vima_vector_t* read2_unbalanced;
         vima_vector_t* write;
         vima_vector_t* write_unbalanced;
-        std::vector<memory_package_t*> vima_buffer;
-        std::vector<memory_package_t*> sub_request_queue;
-        std::vector<vima_vector_t*> working_vectors;
+        memory_package_t** vima_buffer;
         
+        uint32_t vima_buffer_start;
+        uint32_t vima_buffer_end;
+        uint32_t vima_buffer_count;
+        uint16_t* store_hash;
+        uint32_t bits_shift;
+
+        bool read1_d, read2_d, write_d;
 
         // Transactions controller
         // 0 -> Esperando CPU
@@ -58,15 +63,12 @@ class vima_controller_t {
         uint64_t cache_writebacks;
 
         uint64_t i;
-        uint64_t current_index;
         uint64_t request_count;
         uint64_t total_wait;
-
         // Communications
         uint32_t BURST_WIDTH;
         uint32_t LINE_SIZE;
         uint32_t latency_burst;
-
 
         INSTANTIATE_GET_SET_ADD (uint32_t, VIMA_BUFFER)
         INSTANTIATE_GET_SET_ADD (uint32_t, VIMA_VECTOR_SIZE)
@@ -90,10 +92,8 @@ class vima_controller_t {
         INSTANTIATE_GET_SET_ADD (uint64_t, cache_writebacks)
         
         void print_vima_instructions();
-        void check_cache (int index);
         vima_vector_t* search_cache (uint64_t address, cache_status_t* result);
         void check_completion (int index);
-        void write_to_cache (int index);
         
         // Get channel to access DATA
         inline uint64_t get_index(uint64_t addr) {
