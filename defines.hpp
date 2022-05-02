@@ -30,7 +30,6 @@
 #define HIVE_DEBUG 0
 #define VIMA_DEBUG 0
 #define DV_DEBUG 0
-#define VECTORIZE_AFTER 1
 #define UNIMPLEMENTED_ALERTS 0
 
 // ========================

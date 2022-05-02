@@ -1163,7 +1163,8 @@ void processor_t::decode()
 		opcode_package_t *instr = this->fetchBuffer.front();
 		instruction_set_t *instr_set = orcs_engine.instruction_set;
 		instruction_operation_t instr_op = instr->opcode_operation;
-		int32_t uops_created = 0;
+		uint32_t uops_created = 0;
+		bool is_masked = false;
 
 		// First instruction must be ready
 		if (instr->status != PACKAGE_STATE_READY || instr->readyAt > orcs_engine.get_global_cycle())
@@ -1172,6 +1173,7 @@ void processor_t::decode()
 		}
 
 		uint32_t num_uops = 0;
+
 
 		if ((get_HAS_HIVE() && instr->is_hive) ||
 			(get_HAS_VIMA() && (instr_op == INSTRUCTION_OPERATION_VIMA_FP_ALU ||
@@ -1200,11 +1202,12 @@ void processor_t::decode()
 
 			num_uops += (instr_op == INSTRUCTION_OPERATION_BRANCH);
 
-			if (instr_op != INSTRUCTION_OPERATION_BRANCH &&
+			// REDO
+			/*if (instr_op != INSTRUCTION_OPERATION_BRANCH &&
 				instr_op != INSTRUCTION_OPERATION_MEM_LOAD &&
-				instr_op != INSTRUCTION_OPERATION_MEM_STORE) {
+				instr_op != INSTRUCTION_OPERATION_MEM_STORE) {*/
 				num_uops += instr_set->uops_per_instruction[instr->instruction_id].size();
-			}
+			/*}*/
 		}
 
 		// Make sure there's enough space in decodeBuffer
@@ -1212,6 +1215,10 @@ void processor_t::decode()
 		{
 			this->add_stall_full_DecodeBuffer();
 			break;
+		}
+
+		if (strstr(instr->opcode_assembly, "_MASKmskw") != NULL) {
+			is_masked = true;
 		}
 
 
@@ -1236,7 +1243,7 @@ void processor_t::decode()
 				new_uop.opcode_to_uop(this->uopCounter++,
 									  instr_op,
 									  this->LATENCY_MEM_HIVE, this->WAIT_NEXT_MEM_HIVE, &(this->fu_mem_hive),
-									  *instr);
+									  *instr, uops_created, is_masked);
 				new_uop.add_memory_operation(0, 1);
 				++uops_created;
 				new_uop.is_hive = true;
@@ -1266,7 +1273,7 @@ void processor_t::decode()
 				new_uop.opcode_to_uop(this->uopCounter++,
 									  instr_op,
 									  this->LATENCY_MEM_HIVE, this->WAIT_NEXT_MEM_HIVE, &(this->fu_mem_hive),
-									  *instr);
+									  *instr, uops_created, is_masked);
 				new_uop.add_memory_operation(instr->reads_addr[0], instr->reads_size[0]);
 
 				++uops_created;
@@ -1300,7 +1307,7 @@ void processor_t::decode()
 				new_uop.opcode_to_uop(this->uopCounter++,
 									  instr_op,
 									  this->LATENCY_MEM_HIVE, this->WAIT_NEXT_MEM_HIVE, &(this->fu_mem_hive),
-									  *instr);
+									  *instr, uops_created, is_masked);
 				new_uop.add_memory_operation(instr->writes_addr[0], instr->writes_size[0]);
 				++uops_created;
 				new_uop.is_hive = true;
@@ -1347,7 +1354,7 @@ void processor_t::decode()
 				new_uop.opcode_to_uop(this->uopCounter++,
 									  instr_op,
 									  this->LATENCY_MEM_VIMA, this->WAIT_NEXT_MEM_VIMA, &(this->fu_mem_vima),
-									  *instr);
+									  *instr, uops_created, is_masked);
 				new_uop.add_memory_operation(0, 1);
 
 				++uops_created;
@@ -1370,7 +1377,7 @@ void processor_t::decode()
 					ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
 #endif
 
-#if VIMA_DEBUGG
+#if VIMA_DEBUG
 				ORCS_PRINTF("%lu Processor decode(): VIMA instruction %lu decoded!\n",
 							orcs_engine.get_global_cycle(), this->fetchBuffer.front()->opcode_number)
 #endif
@@ -1383,6 +1390,12 @@ void processor_t::decode()
 			}
 		}
 
+		// ===================
+		// Get operation uops:
+		// ===================
+		uint32_t instr_id = instr->instruction_id;
+		std::vector<uint32_t> &uops = instr_set->uops_per_instruction[instr_id];
+
 		// =====================
 		// Decode Reads
 		// =====================
@@ -1394,11 +1407,12 @@ void processor_t::decode()
 			new_uop.opcode_to_uop(this->uopCounter++,
 								  INSTRUCTION_OPERATION_MEM_LOAD,
 								  this->LATENCY_MEM_LOAD, this->WAIT_NEXT_MEM_LOAD, &(this->fu_mem_load),
-								  *this->fetchBuffer.front());
+								  *this->fetchBuffer.front(), uops_created, is_masked);
 			new_uop.add_memory_operation(instr->reads_addr[r], instr->reads_size[r]);
 			++uops_created;
 			// If op is not load, clear registers
-			if (instr_op != INSTRUCTION_OPERATION_MEM_LOAD)
+			if ((uops.size() > 0) || (instr_op == INSTRUCTION_OPERATION_BRANCH) || (instr->num_writes > 0))
+			 //(instr_op != INSTRUCTION_OPERATION_MEM_LOAD)
 			{
 				// ===== Read Regs =============================================
 				/// Clear RRegs
@@ -1424,6 +1438,7 @@ void processor_t::decode()
 			this->total_operations[new_uop.opcode_operation]++;
 			statusInsert = this->decodeBuffer.push_back(new_uop);
 
+
 			#if DECODE_DEBUG
 				ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
 			#endif
@@ -1437,7 +1452,7 @@ void processor_t::decode()
 			new_uop.opcode_to_uop(this->uopCounter++,
 								  INSTRUCTION_OPERATION_MEM_LOAD,
 								  this->LATENCY_MEM_LOAD, this->WAIT_NEXT_MEM_LOAD, &(this->fu_mem_load),
-								  *this->fetchBuffer.front());
+								  *this->fetchBuffer.front(), uops_created, is_masked);
 
 			for (uint32_t r = 0; r < instr->num_reads; ++r)
 			{
@@ -1446,7 +1461,7 @@ void processor_t::decode()
 
 			++uops_created;
 			// If op is not load, clear registers
-			if (instr_op != INSTRUCTION_OPERATION_MEM_LOAD)
+			if ((uops.size() > 0) || (instr_op == INSTRUCTION_OPERATION_BRANCH) || (instr->num_writes > 0)) //(instr_op != INSTRUCTION_OPERATION_MEM_LOAD)
 			{
 				// ===== Read Regs =============================================
 				/// Clear RRegs
@@ -1482,12 +1497,12 @@ void processor_t::decode()
 		// =====================
 		// Decode ALU Operation
 		// =====================
-		if (instr_op != INSTRUCTION_OPERATION_BRANCH &&
+
+		// REDO
+		/*if (instr_op != INSTRUCTION_OPERATION_BRANCH &&
 			instr_op != INSTRUCTION_OPERATION_MEM_LOAD &&
 			instr_op != INSTRUCTION_OPERATION_MEM_STORE)
-		{
-			uint32_t instr_id = instr->instruction_id;
-			std::vector<uint32_t> &uops = instr_set->uops_per_instruction[instr_id];
+		{*/
 			// Iterate over uops from instruction
 			for (uint32_t uop_idx : uops)
 			{
@@ -1498,30 +1513,52 @@ void processor_t::decode()
 									  uop.latency,
 									  this->functional_units[uop.fu_id].wait_next,
 									  &(this->functional_units[uop.fu_id]),
-									  *instr);
+									  *instr, uops_created, is_masked);
 
 				new_uop.add_memory_operation(0, 0);
+
+				// REDO
+				if (instr_op == INSTRUCTION_OPERATION_BRANCH ||
+					instr_op == INSTRUCTION_OPERATION_MEM_LOAD ||
+					instr_op == INSTRUCTION_OPERATION_MEM_STORE) {
+					new_uop.uop_operation = INSTRUCTION_OPERATION_OTHER;
+				}
+
 				++uops_created;
 				if (instr->num_reads > 0)
 				{
 					// ===== Read Regs =============================================
 					//registers /258 aux onde pos[i] = fail
-					bool inserted_258 = false;
+					/// Clear RRegs
+					// Just the reads consume base and index regs
 					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
 					{
-						if (new_uop.read_regs[i] == POSITION_FAIL)
+						new_uop.read_regs[i] = POSITION_FAIL;
+					}
+
+					bool inserted_258 = false;
+					int32_t pos = 0;
+					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+					{
+						if (instr->read_regs[i] == POSITION_FAIL)
 						{
-							new_uop.read_regs[i] = 258;
+							new_uop.read_regs[pos] = 258;
 							inserted_258 = true;
 							break;
 						}
+
+						if ((instr->read_regs[i] != (int32_t) instr->base_reg) &&
+							(instr->read_regs[i] != (int32_t) instr->index_reg)) {
+								new_uop.read_regs[pos++] = instr->read_regs[i];
+							}
+						
 					}
 					ERROR_ASSERT_PRINTF(inserted_258,
 										"Could not insert register_258, all MAX_REGISTERS(%d) used.\n",
 										MAX_REGISTERS);
 				}
 
-				if (instr->num_writes > 0)
+				if ((instr->num_writes > 0) || (instr_op == INSTRUCTION_OPERATION_BRANCH))
 				{
 					// ===== Write Regs =============================================
 					//registers /258 aux onde pos[i] = fail
@@ -1540,9 +1577,10 @@ void processor_t::decode()
 										MAX_REGISTERS);
 				}
 
+
 				new_uop.updatePackageWait(DECODE_LATENCY);
 				new_uop.born_cycle = orcs_engine.get_global_cycle();
-				this->total_operations[new_uop.opcode_operation]++;
+				this->total_operations[new_uop.uop_operation]++;
 				statusInsert = this->decodeBuffer.push_back(new_uop);
 
 				#if DECODE_DEBUG
@@ -1551,7 +1589,7 @@ void processor_t::decode()
 				ERROR_ASSERT_PRINTF(statusInsert != POSITION_FAIL,
 									"Erro, Tentando decodificar mais uops que o maximo permitido");
 			}
-		}
+		/*}*/
 		// =====================
 		//Decode Branch
 		// =====================
@@ -1561,12 +1599,12 @@ void processor_t::decode()
 			new_uop.opcode_to_uop(this->uopCounter++,
 								  INSTRUCTION_OPERATION_BRANCH,
 								  this->LATENCY_INTEGER_ALU, this->WAIT_NEXT_INT_ALU, &(this->functional_units[0]),
-								  *instr);
+								  *instr, uops_created, is_masked);
 
 			new_uop.add_memory_operation(0, 0);
 			++uops_created;
 
-			if (instr->num_reads > 0)
+			if ((instr->num_reads > 0) || (uops.size() > 0))
 			{
 				// ===== Read Regs =============================================
 				/// Insert Reg258 into RReg
@@ -1609,6 +1647,7 @@ void processor_t::decode()
 			this->total_operations[new_uop.opcode_operation]++;
 			statusInsert = this->decodeBuffer.push_back(new_uop);
 
+
 #if DECODE_DEBUG
 				ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
 #endif
@@ -1627,7 +1666,7 @@ void processor_t::decode()
 				new_uop.opcode_to_uop(this->uopCounter++,
 									  INSTRUCTION_OPERATION_MEM_STORE,
 									  this->LATENCY_MEM_STORE, this->WAIT_NEXT_MEM_STORE, &(this->fu_mem_store),
-									  *instr);
+									  *instr, uops_created, is_masked);
 									  
 				for (uint32_t w = 0; w < instr->num_writes; ++w)
 				{
@@ -1636,18 +1675,19 @@ void processor_t::decode()
 
 				++uops_created;
 				//
-				if (instr_op != INSTRUCTION_OPERATION_MEM_STORE)
+				if ((uops.size() > 0) || (instr_op == INSTRUCTION_OPERATION_BRANCH) || (instr->num_reads > 0))
 				{
+					// Is just dependent from the last uop from opcode
 					bool inserted_258 = false;
 					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
 					{
-						if (new_uop.read_regs[i] == POSITION_FAIL)
-						{
-							new_uop.read_regs[i] = 258;
-							inserted_258 = true;
-							break;
-						}
+						new_uop.read_regs[i] = POSITION_FAIL;
 					}
+					/// Insert 258 into WRegs
+					new_uop.read_regs[0] = 258;
+					inserted_258 = true;
+
+
 
 					ERROR_ASSERT_PRINTF(inserted_258,
 										"Could not insert register_258, all MAX_REGISTERS(%d) used.", MAX_REGISTERS)
@@ -1664,6 +1704,7 @@ void processor_t::decode()
 				new_uop.born_cycle = orcs_engine.get_global_cycle();
 				this->total_operations[new_uop.opcode_operation]++;
 				statusInsert = this->decodeBuffer.push_back(new_uop);
+
 
 #if DECODE_DEBUG
 					ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
@@ -1757,7 +1798,7 @@ void processor_t::rename()
 		// é maior ou igual ao atual
 		if (this->decodeBuffer.is_empty() ||
 			this->decodeBuffer.front()->status != PACKAGE_STATE_WAIT ||
-			this->decodeBuffer.front()->readyAt > orcs_engine.get_global_cycle())
+			this->decodeBuffer.front()->readyAt >= orcs_engine.get_global_cycle())
 		{
 			break;
 		}
