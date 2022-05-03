@@ -62,7 +62,9 @@ SRC_HIVE = $(FD_HIVE)/hive_controller.cpp
 
 SRC_VIMA = $(FD_VIMA)/vima_controller.cpp\
 			$(FD_VIMA)/vima_vector.cpp\
-			$(FD_PROCESSOR)/vima_converter.cpp
+			$(FD_PROCESSOR)/vima_converter.cpp\
+			$(FD_PROCESSOR)/vima_prefetcher.cpp
+
 
 SRC_CONFIG = $(FD_CONFIG)/config.cpp
 

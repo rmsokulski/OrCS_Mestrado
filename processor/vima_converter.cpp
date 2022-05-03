@@ -1,6 +1,65 @@
 #include "./../simulator.hpp"
 
+ vima_converter_t::vima_converter_t(){
+    this->iteration = 0;
+    this->state_machine = 0;
+    this->vima_instructions_buffer.allocate(VIMA_INSTRUCTIONS_BUFFER);
 
+
+    // Write register control
+    for (uint32_t i=0; i < 259; ++i) regs_list[i] = false;
+
+            // Conversions data
+            this->next_unique_conversion_id = 1;
+            this->current_conversion = NULL;
+            this->current_conversions.allocate(CURRENT_CONVERSIONS_SIZE); // Greater than any ROB could support
+            this->conversions_blacklist.allocate(CONVERSION_BLACKLIST_SIZE);
+
+    // Prefetch
+    this->contiguous_conversions = 0;
+    this->prefetcher = new vima_prefetcher_t();
+
+            // Statistics
+            this->vima_instructions_launched = 0;
+
+    this->conversion_failed = 0;
+    this->conversion_successful = 0;
+    this->prefetched_vima_used = 0;
+    this->prefetch_failed = 0;
+
+            this->instructions_intercepted = 0;
+            this->instructions_intercepted_until_commit = 0;
+            this->instructions_reexecuted = 0;
+            this->original_program_instructions = 0;
+
+            this->conversion_entry_allocated = 0;
+            this->not_enough_conversion_entries = 0;
+
+
+            this->AGU_result_from_wrong_conversion = 0;
+            this->AGU_result_from_current_conversion = 0;
+
+            this->AVX_256_to_VIMA_conversions = 0;
+            this->AVX_512_to_VIMA_conversions = 0;
+
+            this->time_waiting_for_infos = 0;
+            this->time_waiting_for_infos_start = 0;
+            this->time_waiting_for_infos_stop = 0;
+    
+	this->VIMA_before_CPU = 0;
+	this->CPU_before_VIMA = 0;
+
+            this->conversions_blacklisted = 0;
+            this->avoided_by_the_blacklist = 0;
+
+
+
+            // *******************************
+			// Create a new conversion manager
+			// *****************************
+			this->start_new_conversion();
+
+        }
 
 // TODO -> Definir mais especificamente
 instruction_operation_t vima_converter_t::define_vima_operation(conversion_status_t *conversion_data) {
@@ -55,7 +114,7 @@ void vima_converter_t::generate_VIMA_instruction(conversion_status_t *conversion
 		base_uop.born_cycle = orcs_engine.get_global_cycle();
 
         assert (!this->vima_instructions_buffer.is_full());
-        this->vima_instructions_buffer.push_front(base_uop);
+        this->vima_instructions_buffer.push_back(base_uop);
         this->vima_instructions_launched++;
 
 #if VIMA_CONVERSION_DEBUG
@@ -184,6 +243,14 @@ void vima_converter_t::AGU_result(uop_package_t *uop) {
                     printf("%lu CPU informing VIMA... [Conversion ID %lu]\n", orcs_engine.get_global_cycle(), this->current_conversions[conversion_index].unique_conversion_id);
 #endif
                     orcs_engine.vima_controller->confirm_transaction(1 /* Success */, this->current_conversions[conversion_index].unique_conversion_id);
+                    if (this->current_conversions[conversion_index].VIMA_requirements_meet && 
+                        this->current_conversions[conversion_index].VIMA_requirements_meet_readyAt <= orcs_engine.get_global_cycle())
+                        {
+                            this->VIMA_before_CPU++;
+                        } else {
+                            this->CPU_before_VIMA++;
+                        }
+                
                 }
             } else {
 #if VIMA_CONVERSION_DEBUG == 1
@@ -228,11 +295,7 @@ if (access_size == AVX_256_SIZE) {
 // TODO
 // Get data from VIMA and set registers with it before meet the requirements
 void vima_converter_t::vima_execution_completed(memory_package_t *vima_package, uint64_t readyAt) {
-#if VIMA_CONVERSION_DEBUG == 1
-    printf("******************************************************\n");
-    printf("VIMA requirements achieved! [Conversion ID %lu] in %lu\n", vima_package->unique_conversion_id, readyAt);
-    printf("******************************************************\n");
-#endif
+
 
     // ***************
     // Find conversion
@@ -246,8 +309,15 @@ void vima_converter_t::vima_execution_completed(memory_package_t *vima_package, 
     }
 
     if (conversion_index >= 0) {
+#if VIMA_CONVERSION_DEBUG == 1
+    printf("******************************************************\n");
+    printf("VIMA requirements achieved! [Conversion ID %lu] in %lu\n", vima_package->unique_conversion_id, readyAt);
+    printf("******************************************************\n");
+#endif
         this->current_conversions[conversion_index].VIMA_requirements_meet = true;
         this->current_conversions[conversion_index].VIMA_requirements_meet_readyAt = readyAt;
+    } else {
+        this->prefetcher->vima_execution_completed(vima_package, readyAt);
     }
 }
 
@@ -307,6 +377,28 @@ void vima_converter_t::invalidate_conversion(conversion_status_t *invalidated_co
         }
     }
 
+    // *********************
+    // Invalidate prefetches
+    // *********************
+    this->contiguous_conversions = 0;
+    conversion_status_t *prefetch;
+    while((prefetch = this->prefetcher->get_prefetch())) {
+        // **********
+        // Statistics
+        // **********
+        ++this->prefetch_failed;
+
+        // *************************************
+        // Avisa VIMA para descartar o resultado
+        // *************************************
+        orcs_engine.vima_controller->confirm_transaction(2 /* Failure */, prefetch->unique_conversion_id);
+
+        // **********************
+        // Remove from prefetcher
+        // **********************
+        this->prefetcher->pop_prefetch();
+    }
+
     // *************************
 	// Remove conversões antigas
 	// *************************
@@ -331,6 +423,10 @@ void vima_converter_t::continue_conversion(conversion_status_t *prev_conversion)
 
     printf("Trying to allocate a new converter entry...\n");
 #endif
+    // Prefetch counter
+    this->contiguous_conversions++;
+
+    // Conversion generation
     conversion_status_t new_conversion;
     new_conversion.package_clean();
     int32_t entry = this->current_conversions.push_back(new_conversion);
@@ -387,6 +483,26 @@ void vima_converter_t::continue_conversion(conversion_status_t *prev_conversion)
     this->current_conversion->mem_size = prev_conversion->mem_size;
 
         // Send VIMA speculatively
+        // Check for prefetches
+        conversion_status_t *prefetch = this->prefetcher->get_prefetch();
+        if (prefetch && this->current_conversion->IsEqual(prefetch)) {
+#if VIMA_CONVERSION_DEBUG == 1
+        printf("//**********************************\n");
+        printf("Using prefetched VIMA instruction...\n");
+        printf("//**********************************\n");
+        printf("Base address[0]: %lu\n",  this->current_conversion->base_mem_addr[0]);
+        printf("Base address[1]: %lu\n",  this->current_conversion->base_mem_addr[1]);
+        printf("Base address[3]: %lu\n",  this->current_conversion->base_mem_addr[3]);
+        printf("VIMA_requirements_meet: %s\n",  prefetch->VIMA_requirements_meet ? "true" : "false");
+        printf("VIMA_requirements_meet_readyAt: %lu\n",  prefetch->VIMA_requirements_meet_readyAt);
+#endif
+            this->current_conversion->VIMA_requirements_meet = prefetch->VIMA_requirements_meet;
+            this->current_conversion->VIMA_requirements_meet_readyAt = prefetch->VIMA_requirements_meet_readyAt;
+            this->current_conversion->vima_sent = true;
+            this->prefetcher->pop_prefetch();
+            this->prefetched_vima_used++;
+        } else {
+            assert(prefetch == NULL);
 #if VIMA_CONVERSION_DEBUG == 1
         printf("//****************************\n");
         printf("Generating VIMA instruction...\n");
@@ -397,6 +513,12 @@ void vima_converter_t::continue_conversion(conversion_status_t *prev_conversion)
 #endif
         this->generate_VIMA_instruction(this->current_conversion);
         this->current_conversion->vima_sent = true;
+
+        }
+        if (this->contiguous_conversions >= CONTIGUOUS_CONVERSIONS_TO_PREFETCH) {
+            this->prefetcher->make_prefetch(this->current_conversion);
+
+        }
     }
     // *******************************
     // An entry could not be allocated

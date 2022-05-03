@@ -116,6 +116,8 @@ class vima_controller_t;
 class vima_vector_t;
 class back_list_entry_t;
 class vima_converter_t;
+class vima_prefetcher_t;
+
 //  =========================================//
 // DATA Types
 // ====================================
@@ -151,6 +153,8 @@ extern orcs_engine_t orcs_engine;
 #include "./main_memory/memory_request_client.hpp"
 #include "./package/opcode_package.hpp"
 
+
+
 //  =========================================//
 // Usefull Classes
 //  =========================================//
@@ -167,6 +171,7 @@ extern orcs_engine_t orcs_engine;
 // VIMA Converter
 //  =========================================//
 #include "./processor/vima_converter.hpp"
+#include "./processor/vima_prefetcher.hpp"
 
 //  =========================================//
 // Core Includes

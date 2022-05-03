@@ -16,6 +16,7 @@ processor_t::processor_t()
 	this->stall_full_MOB_Read = 0;
 	this->stall_full_MOB_Write = 0;
 	this->stall_full_ROB = 0;
+	this->stall_full_RS = 0;
 
 	//=============
 	//Statistics Dispatch
@@ -1853,6 +1854,7 @@ void processor_t::rename()
 		// **********************************************************************
 		
 		if (this->unified_reservation_station.size() == this->unified_reservation_station.capacity()) {
+			this->add_stall_full_RS();
 			break;
 		}
 
@@ -1860,6 +1862,7 @@ void processor_t::rename()
 		// All operations
 		// ==============
 		if (reorderBuffer.robUsed >= ROB_SIZE) {
+			this->add_stall_full_ROB();
 			break;
 		}
 
@@ -1871,6 +1874,7 @@ void processor_t::rename()
 
 			if (this->memory_order_buffer_read_used >= MOB_READ || reorderBuffer.robUsed >= ROB_SIZE)
 			{
+				this->add_stall_full_MOB_Read();
 				break;
 			}
 
@@ -1883,6 +1887,7 @@ void processor_t::rename()
 		{
 			if (this->memory_order_buffer_write_used >= MOB_READ || reorderBuffer.robUsed >= ROB_SIZE)
 			{
+				this->add_stall_full_MOB_Write();
 				break;
 			}
 		}
@@ -2552,7 +2557,9 @@ void processor_t::rename()
 		// =======================
 		// Making registers dependences
 		// =======================
-		this->update_registers(rob_line);
+		if (rob_line->uop.is_vima == false || rob_line->uop.unique_conversion_id == 0) {
+			this->update_registers(rob_line);
+		}
 
 #if RENAME_DEBUG
 		ORCS_PRINTF("Rename Opcode number: %lu %s\n",
@@ -4019,6 +4026,7 @@ void processor_t::commit()
 			rob_line->uop.readyAt <= orcs_engine.get_global_cycle())
 		{
 
+
 			this->commit_uop_counter++;
 			switch (rob_line->uop.uop_operation)
 			{
@@ -4397,9 +4405,14 @@ void processor_t::statistics()
 		fprintf(output, "Total_HIVE_Instructions:          %lu\n", this->get_stat_inst_hive_completed());
 		fprintf(output, "Total_VIMA_Instructions:          %lu\n", this->get_stat_inst_vima_completed());
 		utils_t::largestSeparator(output);
-		fprintf(output, "Stalls Fetch:          %lu\n", this->get_stall_full_FetchBuffer());
-		fprintf(output, "Stalls Decode:          %lu\n", this->get_stall_full_DecodeBuffer());
-		fprintf(output, "Stalls Rename:          %lu\n", this->get_stall_full_ROB());
+		fprintf(output, "Stalls Fetch:                %lu\n", this->get_stall_full_FetchBuffer());
+		fprintf(output, "Stalls Decode:               %lu\n", this->get_stall_full_DecodeBuffer());
+		fprintf(output, "Stalls Rename ROB:           %lu\n", this->get_stall_full_ROB());
+		fprintf(output, "Stalls Rename RS:            %lu\n", this->get_stall_full_RS());
+		fprintf(output, "Stalls Rename MOB Read:      %lu\n", this->get_stall_full_MOB_Read());
+		fprintf(output, "Stalls Rename MOB Write:     %lu\n", this->get_stall_full_MOB_Write());
+
+
 		utils_t::largestSeparator(output);
 		fprintf(output, "Dependencies created:          %lu\n", dependencies_created);
 		fprintf(output, "Calls for dependencies creation:          %lu\n", calls_for_dependencies_creation);
