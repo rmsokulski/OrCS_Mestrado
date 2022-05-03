@@ -137,10 +137,6 @@ inline bool circular_buffer_t<CB_TYPE>::is_empty() {
 /// Insert into the newest position
 template <class CB_TYPE>
 int32_t circular_buffer_t<CB_TYPE>::push_back(const CB_TYPE& new_element) {
-    if (this->data == NULL) {
-        int *a = 0x0;
-        *a = 3;
-    }
     ERROR_ASSERT_PRINTF(this->data != NULL, "Trying to access beyond the circular buffer size.\n")
 
     int32_t virtual_position = POSITION_FAIL;

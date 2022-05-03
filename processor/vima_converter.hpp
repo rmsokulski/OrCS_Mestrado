@@ -19,6 +19,8 @@ class conversion_status_t {
         bool entry_can_be_removed; // Indicative that the operations related with this conversion are completed
 
         bool is_mov; // (is_mov) ? (ld1 -> st) : (Ld1 + Ld 2 -> Op -> St)
+
+
     
         void package_clean() {
             this->unique_conversion_id = 0;
@@ -44,6 +46,29 @@ class conversion_status_t {
 
             this->is_mov = false;
 
+        }
+
+        bool IsEqual(conversion_status_t *other) {
+            if (this->unique_conversion_id == other->unique_conversion_id &&
+                this->mem_size == other->mem_size &&
+                this->is_mov == other->is_mov &&
+                this->base_mem_addr[0] == other->base_mem_addr[0] &&
+                this->base_mem_addr[1] == other->base_mem_addr[1] &&
+                this->base_mem_addr[2] == other->base_mem_addr[2] &&
+                this->base_mem_addr[3] == other->base_mem_addr[3]) 
+                {
+                    return true;
+                } 
+                printf("isEqual:\n");
+                printf("ID: %lu vs ID %lu\n", this->unique_conversion_id, other->unique_conversion_id);
+                printf("SIZE: %u vs SIZE %u\n", this->mem_size, other->mem_size);
+                printf("Is_mov: %s vs Is_mov %s\n", this->is_mov ? "true" : "false", other->is_mov ? "true" : "false");
+                printf("base_mem_addr[0]: %lu vs base_mem_addr[0] %lu\n", this->base_mem_addr[0], other->base_mem_addr[0]);
+                printf("base_mem_addr[1]: %lu vs base_mem_addr[1] %lu\n", this->base_mem_addr[1], other->base_mem_addr[1]);
+                printf("base_mem_addr[2]: %lu vs base_mem_addr[2] %lu\n", this->base_mem_addr[2], other->base_mem_addr[2]);
+                printf("base_mem_addr[3]: %lu vs base_mem_addr[3] %lu\n", this->base_mem_addr[3], other->base_mem_addr[3]);
+                exit(1);
+                return false;
         }
 
 };
@@ -96,6 +121,12 @@ class vima_converter_t {
         uint32_t necessary_AVX_256_iterations_to_one_vima;
         uint32_t necessary_AVX_512_iterations_to_one_vima;
 
+        // **********
+        // Prefetcher
+        // **********
+        uint64_t contiguous_conversions;
+        vima_prefetcher_t *prefetcher;
+
 
         // **********
         // Statistics
@@ -104,10 +135,13 @@ class vima_converter_t {
 
         uint64_t conversion_failed;
         uint64_t conversion_successful;
+        uint64_t prefetched_vima_used;
+        uint64_t prefetch_failed;
         uint64_t instructions_intercepted;
         uint64_t instructions_intercepted_until_commit;
         uint64_t instructions_reexecuted;
         uint64_t original_program_instructions;
+        
 
         uint64_t conversion_entry_allocated;
         uint64_t not_enough_conversion_entries;
@@ -123,53 +157,10 @@ class vima_converter_t {
             uint64_t time_waiting_for_infos_start;
             uint64_t time_waiting_for_infos_stop;
 
+        uint64_t VIMA_before_CPU;
+        uint64_t CPU_before_VIMA;
 
-
-        vima_converter_t() {
-            this->iteration = 0;
-            this->state_machine = 0;
-            this->vima_instructions_buffer.allocate(1);
-
-
-            // Write register control
-            for (uint32_t i=0; i < 259; ++i) regs_list[i] = false;
-
-            // Conversions data
-            this->next_unique_conversion_id = 1;
-            this->current_conversion = NULL;
-            this->current_conversions.allocate(CURRENT_CONVERSIONS_SIZE); // Greater than any ROB could support
-
-            // Statistics
-            this->vima_instructions_launched = 0;
-
-            this->conversion_failed = 0;
-            this->conversion_successful = 0;
-
-            this->instructions_intercepted = 0;
-            this->instructions_intercepted_until_commit = 0;
-            this->instructions_reexecuted = 0;
-            this->original_program_instructions = 0;
-
-            this->conversion_entry_allocated = 0;
-            this->not_enough_conversion_entries = 0;
-
-
-            this->AGU_result_from_wrong_conversion = 0;
-            this->AGU_result_from_current_conversion = 0;
-
-            this->AVX_256_to_VIMA_conversions = 0;
-            this->AVX_512_to_VIMA_conversions = 0;
-            
-            this->time_waiting_for_infos = 0;
-            this->time_waiting_for_infos_start = 0;
-            this->time_waiting_for_infos_stop = 0;
-
-            // *******************************
-			// Create a new conversion manager
-			// *****************************
-			this->start_new_conversion();
-
-        }
+        vima_converter_t();
 
         void initialize(uint32_t mem_operation_latency, uint32_t mem_operation_wait_next, functional_unit_t *mem_operation_fu, uint32_t VIMA_SIZE) {
             this->mem_operation_latency = mem_operation_latency;
@@ -296,6 +287,8 @@ inline void vima_converter_t::statistics(FILE *output) {
     fprintf(output, "AVX_512_to_VIMA_conversions: %lu\n", this->AVX_512_to_VIMA_conversions);
     fprintf(output, "conversion_failed: %lu\n", conversion_failed); 
     fprintf(output, "conversion_successful: %lu\n", conversion_successful); 
+    fprintf(output, "prefetched_vima_used: %lu\n", prefetched_vima_used);     
+    fprintf(output, "prefetch_failed: %lu\n", prefetch_failed);
     fprintf(output, "instructions_intercepted: %lu\n", instructions_intercepted); 
     fprintf(output, "instructions_intercepted_until_commit: %lu\n", instructions_intercepted_until_commit); 
     fprintf(output, "instructions_reexecuted: %lu\n", instructions_reexecuted); 
@@ -305,4 +298,7 @@ inline void vima_converter_t::statistics(FILE *output) {
     fprintf(output, "AGU_result_from_current_conversion: %lu\n", AGU_result_from_current_conversion); 
     fprintf(output, "AGU_result_from_wrong_conversion: %lu\n", AGU_result_from_wrong_conversion);
     fprintf(output, "time_waiting_for_infos: %lu\n", time_waiting_for_infos);
+    fprintf(output, "VIMA_before_CPU: %lu\n", VIMA_before_CPU);
+    fprintf(output, "CPU_before_VIMA: %lu\n", CPU_before_VIMA);
+
 }
