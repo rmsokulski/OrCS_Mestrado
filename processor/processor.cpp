@@ -1714,13 +1714,12 @@ void processor_t::decode()
 									"Erro, Tentando decodificar mais uops que o maximo permitido")
 #if PROCESSOR_DEBUG
 				assert(new_uop.uop_operation != -1);
-				ORCS_PRINTF("%lu processor %lu decode(): addr %lu uop %lu %s, Type: %s, readyAt %lu, fetchBuffer: %u, decodeBuffer: %u, robUsed: %u.\n",
+				ORCS_PRINTF("%lu processor %lu decode(): addr %lu uop %lu %s, readyAt %lu, fetchBuffer: %u, decodeBuffer: %u, robUsed: %u.\n",
 							orcs_engine.get_global_cycle(),
 							this->processor_id,
 							new_uop.opcode_address,
 							new_uop.uop_number,
 							get_enum_instruction_operation_char(new_uop.uop_operation),
-							(new_uop.is_validation) ? "Val" : (new_uop.is_vectorial_part >= 0) ? "VP" : "Ins",
 							new_uop.readyAt,
 							this->fetchBuffer.get_size(),
 							this->decodeBuffer.get_size(),
@@ -1798,8 +1797,14 @@ void processor_t::rename()
 		// é maior ou igual ao atual
 		if (this->decodeBuffer.is_empty() ||
 			this->decodeBuffer.front()->status != PACKAGE_STATE_WAIT ||
-			this->decodeBuffer.front()->readyAt >= orcs_engine.get_global_cycle())
+			this->decodeBuffer.front()->readyAt > orcs_engine.get_global_cycle())
 		{
+			//printf("Decode front not ready STATUS %s readyAt %lu\n", get_enum_package_state_char(this->decodeBuffer.front()->status), this->decodeBuffer.front()->readyAt);
+			break;
+		}
+
+		if (reorderBuffer.robUsed >= ROB_SIZE) {
+			this->add_stall_full_ROB();
 			break;
 		}
 
@@ -1840,7 +1845,7 @@ void processor_t::rename()
 		//=======================
 		if (this->decodeBuffer.front()->uop_operation == INSTRUCTION_OPERATION_MEM_STORE)
 		{
-			if (this->memory_order_buffer_write_used >= MOB_READ || reorderBuffer.robUsed >= ROB_SIZE)
+			if (this->memory_order_buffer_write_used >= MOB_WRITE || reorderBuffer.robUsed >= ROB_SIZE)
 			{
 				break;
 			}
@@ -1873,8 +1878,9 @@ void processor_t::rename()
 				uop_operation == INSTRUCTION_OPERATION_HIVE_LOAD ||
 				uop_operation == INSTRUCTION_OPERATION_HIVE_STORE)
 			{
-				if (this->memory_order_buffer_hive_used >= MOB_HIVE || reorderBuffer.robUsed >= ROB_SIZE)
+				if (this->memory_order_buffer_hive_used >= MOB_HIVE || reorderBuffer.robUsed >= ROB_SIZE) {
 					break;
+				}
 
 				pos_mob = this->search_position_mob_hive(&MOB_LIMIT);
 				if (pos_mob == POSITION_FAIL)
@@ -1910,8 +1916,9 @@ void processor_t::rename()
 				uop_operation == INSTRUCTION_OPERATION_VIMA_GATHER  ||
 				uop_operation == INSTRUCTION_OPERATION_VIMA_SCATTER)
 			{
-				if (this->memory_order_buffer_vima_used >= MOB_VIMA || reorderBuffer.robUsed >= ROB_SIZE)
+				if (this->memory_order_buffer_vima_used >= MOB_VIMA || reorderBuffer.robUsed >= ROB_SIZE) {
 					break;
+				}
 				else
 				{
 					#if VIMA_DEBUGG
@@ -2273,8 +2280,8 @@ void processor_t::dispatch()
 		{
 			ORCS_PRINTF("cycle %lu\n", orcs_engine.get_global_cycle())
 			ORCS_PRINTF("=================\n")
-			ORCS_PRINTF("Unified Reservations Station on use: %lu\n", urs->size())
-			ORCS_PRINTF("Trying Dispatch %s - %s\n", (rob_line->uop.is_validation) ? "Val" : (rob_line->uop.is_vectorial_part >= 0) ? "VP" : "Ins", rob_line->content_to_string().c_str())
+			ORCS_PRINTF("Unified Reservations Station on use: %lu\n", this->unified_reservation_station.size())
+			ORCS_PRINTF("Trying Dispatch - %s\n", rob_line->content_to_string().c_str())
 			ORCS_PRINTF("=================\n")
 		}
 #endif
