@@ -973,7 +973,7 @@ void processor_t::remove_back_mob_write()
 	this->memory_order_buffer_write[this->memory_order_buffer_write_end].package_clean();
 	if (this->memory_order_buffer_write_end == 0)
 	{
-		this->memory_order_buffer_write_end = MOB_READ - 1;
+		this->memory_order_buffer_write_end = MOB_WRITE - 1;
 	}
 	else
 	{
@@ -987,6 +987,7 @@ uint64_t instructions_mshr_stall = 0;
 
 void processor_t::fetch()
 {
+
 	opcode_package_t operation;
 	// uint32_t position;
 	// Trace ->fetchBuffer
@@ -1799,6 +1800,8 @@ void processor_t::update_registers(reorder_buffer_line_t *new_rob_line)
 // ============================================================================
 bool converted = false;
 bool invalidate = false;
+//bool travado = false;
+
 void processor_t::rename()
 {
 	size_t i;
@@ -1862,9 +1865,16 @@ void processor_t::rename()
 		// All operations
 		// ==============
 		if (reorderBuffer.robUsed >= ROB_SIZE) {
+			/*if(!travado){
+				travado = true;
+				printf("********************************************************\n");
+				printf("%lu (uop %lu:%u) ROB Full!!!\n", orcs_engine.get_global_cycle(), this->decodeBuffer.front()->opcode_address, this->decodeBuffer.front()->uop_id);
+				printf("********************************************************\n");
+			}*/
 			this->add_stall_full_ROB();
 			break;
 		}
+		//travado = false;
 
 		//=======================
 		// Memory Operation Read
@@ -1885,7 +1895,7 @@ void processor_t::rename()
 		//=======================
 		if (origin_buffer->front()->uop_operation == INSTRUCTION_OPERATION_MEM_STORE)
 		{
-			if (this->memory_order_buffer_write_used >= MOB_READ || reorderBuffer.robUsed >= ROB_SIZE)
+			if (this->memory_order_buffer_write_used >= MOB_WRITE || reorderBuffer.robUsed >= ROB_SIZE)
 			{
 				this->add_stall_full_MOB_Write();
 				break;
@@ -1895,6 +1905,7 @@ void processor_t::rename()
 
 		// LOAD AVX
 		uop_package_t *uop = origin_buffer->front();
+		
 		
 		// Check if converter is active
 		if (this->vima_converter.current_conversion == 0x0) {
@@ -2347,7 +2358,7 @@ void processor_t::rename()
 				this->vima_converter.invalidate_conversion(this->vima_converter.current_conversion);
 			}
 		}
-
+		
 		// Verifica se há espaço na URS
 		if (this->unified_reservation_station.size() == this->unified_reservation_station.capacity()) {
 			break;
@@ -2385,7 +2396,7 @@ void processor_t::rename()
 		//=======================
 		if (origin_buffer->front()->uop_operation == INSTRUCTION_OPERATION_MEM_STORE)
 		{
-			if (this->memory_order_buffer_write_used >= MOB_READ || reorderBuffer.robUsed >= ROB_SIZE)
+			if (this->memory_order_buffer_write_used >= MOB_WRITE || reorderBuffer.robUsed >= ROB_SIZE)
 			{
 				break;
 			}
@@ -3970,8 +3981,7 @@ void processor_t::commit()
 		reorder_buffer_line_t *rob_line = &rob->reorderBuffer[pos_buffer];
 
 		// Check if the conversion completed
-		if ((rob->robUsed != 0) &&
-			rob_line->stage == PROCESSOR_STAGE_WAITING_DYN)
+		if (rob->robUsed != 0)
 		{
 			this->check_conversion();
 		}
