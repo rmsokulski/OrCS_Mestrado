@@ -972,7 +972,7 @@ void processor_t::remove_back_mob_write()
 	this->memory_order_buffer_write[this->memory_order_buffer_write_end].package_clean();
 	if (this->memory_order_buffer_write_end == 0)
 	{
-		this->memory_order_buffer_write_end = MOB_READ - 1;
+		this->memory_order_buffer_write_end = MOB_WRITE - 1;
 	}
 	else
 	{
@@ -1830,6 +1830,7 @@ void processor_t::rename()
 			this->decodeBuffer.front()->readyAt > orcs_engine.get_global_cycle()) &&
 			(this->vima_converter.vima_instructions_buffer.is_empty()))
 		{
+			//printf("Decode front not ready STATUS %s readyAt %lu\n", get_enum_package_state_char(this->decodeBuffer.front()->status), this->decodeBuffer.front()->readyAt);
 			break;
 		}
 
@@ -1879,7 +1880,7 @@ void processor_t::rename()
 		//=======================
 		if (origin_buffer->front()->uop_operation == INSTRUCTION_OPERATION_MEM_STORE)
 		{
-			if (this->memory_order_buffer_write_used >= MOB_READ || reorderBuffer.robUsed >= ROB_SIZE)
+			if (this->memory_order_buffer_write_used >= MOB_WRITE || reorderBuffer.robUsed >= ROB_SIZE)
 			{
 				break;
 			}
@@ -2399,8 +2400,9 @@ void processor_t::rename()
 				uop_operation == INSTRUCTION_OPERATION_HIVE_LOAD ||
 				uop_operation == INSTRUCTION_OPERATION_HIVE_STORE)
 			{
-				if (this->memory_order_buffer_hive_used >= MOB_HIVE || reorderBuffer.robUsed >= ROB_SIZE)
+				if (this->memory_order_buffer_hive_used >= MOB_HIVE || reorderBuffer.robUsed >= ROB_SIZE) {
 					break;
+				}
 
 				pos_mob = this->search_position_mob_hive(&MOB_LIMIT);
 				if (pos_mob == POSITION_FAIL)
@@ -2436,8 +2438,9 @@ void processor_t::rename()
 				uop_operation == INSTRUCTION_OPERATION_VIMA_GATHER  ||
 				uop_operation == INSTRUCTION_OPERATION_VIMA_SCATTER)
 			{
-				if (this->memory_order_buffer_vima_used >= MOB_VIMA || reorderBuffer.robUsed >= ROB_SIZE)
+				if (this->memory_order_buffer_vima_used >= MOB_VIMA || reorderBuffer.robUsed >= ROB_SIZE) {
 					break;
+				}
 				else
 				{
 					#if VIMA_DEBUG
@@ -2840,8 +2843,8 @@ void processor_t::dispatch()
 		{
 			ORCS_PRINTF("cycle %lu\n", orcs_engine.get_global_cycle())
 			ORCS_PRINTF("=================\n")
-			ORCS_PRINTF("Unified Reservations Station on use: %lu\n", urs->size())
-			ORCS_PRINTF("Trying Dispatch %s - %s\n", (rob_line->uop.is_validation) ? "Val" : (rob_line->uop.is_vectorial_part >= 0) ? "VP" : "Ins", rob_line->content_to_string().c_str())
+			ORCS_PRINTF("Unified Reservations Station on use: %lu\n", this->unified_reservation_station.size())
+			ORCS_PRINTF("Trying Dispatch - %s\n", rob_line->content_to_string().c_str())
 			ORCS_PRINTF("=================\n")
 		}
 #endif
@@ -3908,8 +3911,7 @@ void processor_t::commit()
 		reorder_buffer_line_t *rob_line = &rob->reorderBuffer[pos_buffer];
 
 		// Check if the conversion completed
-		if ((rob->robUsed != 0) &&
-			rob_line->stage == PROCESSOR_STAGE_WAITING_DYN)
+		if (rob->robUsed != 0)
 		{
 			this->check_conversion();
 		}
