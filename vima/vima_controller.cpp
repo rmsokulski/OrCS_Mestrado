@@ -299,7 +299,7 @@ void vima_controller_t::clock(){
     #if VIMA_CONVERSION_DEBUG == 1
                         printf("%lu VIMA informing CPU... [Conversion ID %lu]\n", orcs_engine.get_global_cycle(), vima_buffer[index]->unique_conversion_id);
     #endif		
-                        orcs_engine.processor->vima_converter.vima_execution_completed(vima_buffer[index], this->latency_burst);
+                        orcs_engine.processor->vima_converter.vima_execution_completed(vima_buffer[index], orcs_engine.get_global_cycle() + this->latency_burst);
                         vima_buffer[index]->cpu_informed = true;
                         vima_buffer[index]->updatePackageWait(1); // VIMA data sent to CPU -> Considering that was sent with the confirmation to the CPU
                     }
