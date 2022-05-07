@@ -955,7 +955,7 @@ void processor_t::remove_back_mob_write()
 	this->memory_order_buffer_write[this->memory_order_buffer_write_end].package_clean();
 	if (this->memory_order_buffer_write_end == 0)
 	{
-		this->memory_order_buffer_write_end = MOB_READ - 1;
+		this->memory_order_buffer_write_end = MOB_WRITE - 1;
 	}
 	else
 	{
@@ -969,6 +969,7 @@ uint64_t instructions_mshr_stall = 0;
 
 void processor_t::fetch()
 {
+
 	opcode_package_t operation;
 	// uint32_t position;
 	// Trace ->fetchBuffer
@@ -1779,6 +1780,7 @@ void processor_t::update_registers(reorder_buffer_line_t *new_rob_line)
 }
 
 // ============================================================================
+//bool travado = false;
 void processor_t::rename()
 {
 	size_t i;
@@ -1804,9 +1806,16 @@ void processor_t::rename()
 		}
 
 		if (reorderBuffer.robUsed >= ROB_SIZE) {
+			/*if(!travado){
+				travado = true;
+				printf("********************************************************\n");
+				printf("%lu (uop %lu:%u) ROB Full!!!\n", orcs_engine.get_global_cycle(), this->decodeBuffer.front()->opcode_address, this->decodeBuffer.front()->uop_id);
+				printf("********************************************************\n");
+			}*/
 			this->add_stall_full_ROB();
 			break;
 		}
+		//travado = false;
 
 		// Verifica se há espaço na URS
 		if (this->unified_reservation_station.size() == this->unified_reservation_station.capacity()) {
