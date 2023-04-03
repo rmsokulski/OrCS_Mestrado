@@ -61,7 +61,10 @@ SRC_MEMORY = $(FD_MEMORY)/memory_channel.cpp\
 SRC_HIVE = $(FD_HIVE)/hive_controller.cpp
 
 SRC_VIMA = $(FD_VIMA)/vima_controller.cpp\
-			$(FD_VIMA)/vima_vector.cpp
+			$(FD_VIMA)/vima_vector.cpp\
+			$(FD_PROCESSOR)/vima_converter.cpp\
+			$(FD_PROCESSOR)/vima_prefetcher.cpp
+
 
 SRC_CONFIG = $(FD_CONFIG)/config.cpp
 
@@ -105,11 +108,8 @@ clean:
 debug:
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose 2> log.valgrind  ./orcs -c configuration_files/skylakeProposta.cfg -t '../Traces/vecSumScalar' > ../Logs/vecSumScalar.vet.log
 
-orcs_vet: clean all
-	mv orcs orcs_vet
-	./orcs_vet -c configuration_files/skylake.cfg -t ../simpleVecSum512 > log_debug_n2
+orcs_run:
+	./orcs -c configuration_files/skylakeServerVIMA.cfg -t ../Experiments/Traces/vecsum_avx_512
 
-
-10K_test:
-	./orcs_vet -c configuration_files/skylake.cfg -t ../simpleVecSum10K > log_debug_10K
-	./orcs_base -c configuration_files/skylake.cfg -t ../simpleVecSum10K > log_debug_base_10K
+experiments_build:
+	cd ../Experiments && make && make Traces

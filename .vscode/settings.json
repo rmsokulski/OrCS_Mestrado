@@ -54,6 +54,13 @@
         "random": "cpp",
         "*.h++": "cpp",
         "*.ph": "cpp",
-        "*.tlh": "cpp"
-    }
+        "*.tlh": "cpp",
+        "bit": "cpp",
+        "compare": "cpp",
+        "concepts": "cpp",
+        "numbers": "cpp",
+        "semaphore": "cpp",
+        "stop_token": "cpp"
+    },
+    "C_Cpp.dimInactiveRegions": false
 }

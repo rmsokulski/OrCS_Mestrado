@@ -54,13 +54,13 @@ unsigned int hex_to_dec(char x) {
 }
 
 unsigned int ascii_to_hex(const char *src,
-                          xed_uint8_t *dst,
+                          xed_uint32_t *dst,
                           unsigned int max_bytes) {
     const unsigned int len = strlen(src);
     memset(dst, 0, max_bytes);
 
     for (unsigned int p = 0, i = 0; i < len / 2; ++i, p += 2)
-        dst[i] = (xed_uint8_t) (hex_to_dec(src[p]) * 16 + hex_to_dec(src[p+1]));
+        dst[i] = (xed_uint32_t) (hex_to_dec(src[p]) * 16 + hex_to_dec(src[p+1]));
     return len/2;
 }
 

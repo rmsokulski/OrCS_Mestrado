@@ -17,6 +17,8 @@ public:
 		for (uint32_t i = 0; i < size; i++)
 		{
 			this->reorderBuffer[i].reg_deps_ptr_array = utils_t::template_allocate_initialize_array<reorder_buffer_line_t *>(size, NULL);
+			this->reorderBuffer[i].reg_deps_conv_ptr_array = utils_t::template_allocate_initialize_array<conversion_status_t *>(size, NULL);
+		
 		}
 	}
 
@@ -45,7 +47,13 @@ public:
 };
 
 class processor_t {
-    private:    
+    private:
+	//===============
+	//VIMA Conversion
+	//===============
+	bool conversion_enabled;
+	uint32_t VIMA_SIZE;
+
 	//=============
 	//Fetch Related
 	//=============
@@ -62,6 +70,7 @@ class processor_t {
 	uint64_t stall_full_MOB_Read;
 	uint64_t stall_full_MOB_Write;
 	uint64_t stall_full_ROB;
+	uint64_t stall_full_RS;
 
 	//=============
 	//Statistics Dispatch
@@ -247,9 +256,14 @@ class processor_t {
 		uint32_t memory_write_executed;
 		uint32_t memory_hive_executed;
 		uint32_t memory_vima_executed;
+		// ====================================================================
+		// VIMA Converter
+		// ====================================================================
+		vima_converter_t vima_converter;
+		// Rastreiam última instrução que escreveu em cada registrador
+		uint64_t write_addr[259];
+		uint64_t write_uop[259]; // Armazena o uop_id correspondente
 
-
-		
 		// ====================================================================
 		/// Methods
 		// ====================================================================
@@ -266,8 +280,13 @@ class processor_t {
 		// ====================================================================
 		// ROB RELATED
 		void update_registers(reorder_buffer_line_t *robLine);
+		void update_registers_to_conversion(uop_package_t *uop, conversion_status_t *conversion);
 		void solve_registers_dependency(reorder_buffer_line_t *rob_line);
+		void resolve_registers_to(reorder_buffer_line_t *rob_line);
+		void resolve_registers_to(conversion_status_t *conversion);
 		int32_t searchPositionROB(ROB_t *rob);
+		void returnPositionROB(ROB_t *rob);
+		uint32_t lastPositionROB(ROB_t *rob);
 		void removeFrontROB(ROB_t *rob);
 		// ====================================================================
 		// MOB READ RELATED
@@ -290,6 +309,7 @@ class processor_t {
 		int32_t search_n_positions_mob_vima(uint32_t n, uint32_t *mob_size);
 		int32_t search_position_mob_vima(uint32_t *mob_size);
 		void remove_front_mob_vima();
+		void remove_back_mob_vima();
 		// ====================================================================
 		// ====================================================================
 		// Stage Methods
@@ -309,7 +329,14 @@ class processor_t {
 		uint32_t mob_vima();
 		void clean_mob_vima();
 		
+
 		void commit();
+
+		// ====================================================================
+		// Conversion
+		// ====================================================================
+		void check_conversion();
+		void conversion_flush(conversion_status_t * conversion);
 
 		// ====================================================================
 		// Bool Functions @return 
@@ -412,6 +439,7 @@ class processor_t {
 
 
 		INSTANTIATE_GET_SET(uint64_t,processor_id)
+		INSTANTIATE_GET_SET(uint64_t,VIMA_SIZE)
 		// ====================================================================
 		// Statistics
 		// ====================================================================
@@ -426,6 +454,7 @@ class processor_t {
 
 
 		INSTANTIATE_GET_SET_ADD(uint64_t,stall_full_ROB)
+		INSTANTIATE_GET_SET_ADD(uint64_t,stall_full_RS)
 		INSTANTIATE_GET_SET_ADD(uint64_t,stall_empty_RS)
 		INSTANTIATE_GET_SET_ADD(uint64_t,stat_disambiguation_read_false_positive)
 		INSTANTIATE_GET_SET_ADD(uint64_t,stat_disambiguation_write_false_positive)
