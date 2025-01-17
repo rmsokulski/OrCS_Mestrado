@@ -1165,6 +1165,7 @@ void processor_t::decode()
 		instruction_set_t *instr_set = orcs_engine.instruction_set;
 		instruction_operation_t instr_op = instr->opcode_operation;
 		uint32_t uops_created = 0;
+		uint32_t num_uops = 0;
 		bool is_masked = false;
 
 		// First instruction must be ready
@@ -1173,7 +1174,7 @@ void processor_t::decode()
 			break;
 		}
 
-		uint32_t num_uops = 0;
+
 
 
 		if ((get_HAS_HIVE() && instr->is_hive) ||
@@ -1416,14 +1417,16 @@ void processor_t::decode()
 			 //(instr_op != INSTRUCTION_OPERATION_MEM_LOAD)
 			{
 				// ===== Read Regs =============================================
-				/// Clear RRegs
-				for (uint32_t i = 0; i < MAX_REGISTERS; i++)
-				{
-					new_uop.read_regs[i] = POSITION_FAIL;
+				if (instr->base_reg != UINT32_MAX) { // x86 -> RISC-V base/index are already in RRegs
+					/// Clear RRegs
+					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+					{
+						new_uop.read_regs[i] = POSITION_FAIL;
+					}
+					/// Insert BASE and INDEX into RReg
+					new_uop.read_regs[0] = instr->base_reg;
+					new_uop.read_regs[1] = instr->index_reg;
 				}
-				/// Insert BASE and INDEX into RReg
-				new_uop.read_regs[0] = instr->base_reg;
-				new_uop.read_regs[1] = instr->index_reg;
 				// ===== Write Regs =============================================
 				/// Clear WRegs
 				for (uint32_t i = 0; i < MAX_REGISTERS; i++)
@@ -1465,14 +1468,16 @@ void processor_t::decode()
 			if ((uops.size() > 0) || (instr_op == INSTRUCTION_OPERATION_BRANCH) || (instr->num_writes > 0)) //(instr_op != INSTRUCTION_OPERATION_MEM_LOAD)
 			{
 				// ===== Read Regs =============================================
-				/// Clear RRegs
-				for (uint32_t i = 0; i < MAX_REGISTERS; i++)
-				{
-					new_uop.read_regs[i] = POSITION_FAIL;
+				if (instr->base_reg != UINT32_MAX) { // x86 -> RISC-V base/index are already in RRegs
+				  /// Clear RRegs
+				  for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+				  {
+				  	new_uop.read_regs[i] = POSITION_FAIL;
+				  }
+				  /// Insert BASE and INDEX into RReg
+				  new_uop.read_regs[0] = instr->base_reg;
+				  new_uop.read_regs[1] = instr->index_reg;
 				}
-				/// Insert BASE and INDEX into RReg
-				new_uop.read_regs[0] = instr->base_reg;
-				new_uop.read_regs[1] = instr->index_reg;
 				// ===== Write Regs =============================================
 				/// Clear WRegs
 				for (uint32_t i = 0; i < MAX_REGISTERS; i++)
@@ -1516,7 +1521,8 @@ void processor_t::decode()
 									  &(this->functional_units[uop.fu_id]),
 									  *instr, uops_created, is_masked);
 
-				new_uop.add_memory_operation(0, 0);
+				// Precisa dessa operação vazia?
+				// new_uop.add_memory_operation(0, 0);
 
 				// REDO
 				if (instr_op == INSTRUCTION_OPERATION_BRANCH ||
@@ -1528,8 +1534,11 @@ void processor_t::decode()
 				++uops_created;
 				if (instr->num_reads > 0)
 				{
+					// The uop for the memory load is writing in the register 258
+					// its a dependency between uops of the same instruction.
+
 					// ===== Read Regs =============================================
-					//registers /258 aux onde pos[i] = fail
+					// registers /258 aux onde pos[i] = fail
 					/// Clear RRegs
 					// Just the reads consume base and index regs
 					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
@@ -1547,9 +1556,10 @@ void processor_t::decode()
 							inserted_258 = true;
 							break;
 						}
-
-						if ((instr->read_regs[i] != (int32_t) instr->base_reg) &&
-							(instr->read_regs[i] != (int32_t) instr->index_reg)) {
+						// Em RISC-V vai adicionar todos :P
+						if (((instr->read_regs[i] != (int32_t) instr->base_reg) &&
+							(instr->read_regs[i] != (int32_t) instr->index_reg)) ||
+							(instr->index_reg == UINT32_MAX)) {
 								new_uop.read_regs[pos++] = instr->read_regs[i];
 							}
 						
@@ -1561,6 +1571,8 @@ void processor_t::decode()
 
 				if ((instr->num_writes > 0) || (instr_op == INSTRUCTION_OPERATION_BRANCH))
 				{
+					// There will be another uop after this list.
+					// Se adding a dependecy for it in register 258
 					// ===== Write Regs =============================================
 					//registers /258 aux onde pos[i] = fail
 					bool inserted_258 = false;
@@ -1594,6 +1606,7 @@ void processor_t::decode()
 		// =====================
 		//Decode Branch
 		// =====================
+		// Last uop from a branch (JUMPS)
 		if (instr_op == INSTRUCTION_OPERATION_BRANCH)
 		{
 			new_uop.package_clean();
@@ -1602,11 +1615,14 @@ void processor_t::decode()
 								  this->LATENCY_INTEGER_ALU, this->WAIT_NEXT_INT_ALU, &(this->functional_units[0]),
 								  *instr, uops_created, is_masked);
 
-			new_uop.add_memory_operation(0, 0);
+			// Precisa dessa operação vazia?
+			// new_uop.add_memory_operation(0, 0);
 			++uops_created;
 
 			if ((instr->num_reads > 0) || (uops.size() > 0))
 			{
+				// There were other uops sent before. Link them with register 258
+
 				// ===== Read Regs =============================================
 				/// Insert Reg258 into RReg
 				bool inserted_258 = false;
@@ -1626,6 +1642,8 @@ void processor_t::decode()
 
 			if (instr->num_writes > 0)
 			{
+				// There will be an write uop after this branch uop, both from the same instruction.
+
 				// ===== Write Regs =============================================
 				//registers /258 aux onde pos[i] = fail
 				bool inserted_258 = false;
@@ -1660,6 +1678,7 @@ void processor_t::decode()
 		// =====================
 		//Decode Write
 		// =====================
+		// Last write uops from an instruction
 		if (instr->num_writes > 0)
 		{
 			
@@ -1675,10 +1694,11 @@ void processor_t::decode()
 				}
 
 				++uops_created;
-				//
+
+				// There was a previous uops from the same instruction. The last wrote in the 258 register.
 				if ((uops.size() > 0) || (instr_op == INSTRUCTION_OPERATION_BRANCH) || (instr->num_reads > 0))
 				{
-					// Is just dependent from the last uop from opcode
+					// Create a dependency with the previous uop from the same instruction
 					bool inserted_258 = false;
 					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
 					{
@@ -1695,6 +1715,8 @@ void processor_t::decode()
 
 					// ===== Write Regs =============================================
 					/// Clear WRegs
+					// This is the specific uop for store within an instruction.
+					// The uops before already wrote in the register.
 					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
 					{
 						new_uop.write_regs[i] = POSITION_FAIL;

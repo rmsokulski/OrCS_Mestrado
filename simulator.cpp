@@ -9,6 +9,7 @@ static void display_use() {
     ORCS_PRINTF("-t [trace file name]\n\n");
     ORCS_PRINTF("-f [output file name]\n\n");
     ORCS_PRINTF("-c [number of cores]\n\n");
+    ORCS_PRINTF("-d [x86/riscv]\n\n");
     ORCS_PRINTF("Please provide -c <number of cores> [-t <trace_file_basename>] -f <output filename>\n");
 }
 
@@ -21,7 +22,7 @@ static uint32_t process_argv(int argc, char **argv) {
         {"core",        required_argument, 0, 'c'},
         {"trace",       required_argument, 0, 't'},
         {"output_filename",       optional_argument, 0, 'f'},
-        {"use_pin", optional_argument, 0, 'p'},
+        {"direct_trace", required_argument, 0, 'd'},
         {NULL,          0, NULL, 0}
     };
 
@@ -30,7 +31,7 @@ static uint32_t process_argv(int argc, char **argv) {
     int option_index = 0;
     uint32_t traces_informados = 0;
     
-    while ((opt = getopt_long_only(argc, argv, "h:c:t:f:pw:",
+    while ((opt = getopt_long_only(argc, argv, "h:c:t:f:d:",
                  long_options, &option_index)) != -1) {
         switch (opt) {
         case 0:
@@ -52,8 +53,11 @@ static uint32_t process_argv(int argc, char **argv) {
         case 'f':
             orcs_engine.output_file_name = optarg;
             break;
-        case 'p':
-            orcs_engine.use_pin = true;
+        case 'd':
+            if (!strcmp(optarg, "x86"))
+                orcs_engine.use_pin = true;
+            else if (!strcmp(optarg, "riscv"))
+                orcs_engine.use_spike = true;
             break;
         case '?':
             break;
@@ -75,7 +79,7 @@ static uint32_t process_argv(int argc, char **argv) {
     uint32_t NUMBER_OF_PROCESSORS = cfg_root["PROCESSOR"].getLength();
 
     utils_t::process_mem_usage(&orcs_engine.stat_vm_start, &orcs_engine.stat_rss_start);
-    if(orcs_engine.use_pin == false) {
+    if((orcs_engine.use_pin == false) && (orcs_engine.use_spike == false)) {
         // ORCS_PRINTF ("traces_informados = %u, NUMBER_OF_PROCESSORS = %u\n", traces_informados, NUMBER_OF_PROCESSORS)
         ERROR_ASSERT_PRINTF(traces_informados==NUMBER_OF_PROCESSORS,"Erro, Numero de traces informados diferente do numero de cores\n")
         if (orcs_engine.arg_trace_file_name.empty()) {
@@ -139,8 +143,9 @@ std::string get_status_execution(uint32_t NUMBER_OF_PROCESSORS){
         final_report+=report;
 
         // Get benchmark name
-        snprintf(report,sizeof(report),"Benchmark %s\n",(orcs_engine.use_pin) 
-                                                        ? "PIN" : orcs_engine.arg_trace_file_name[cpu].c_str());
+        snprintf(report,sizeof(report),"Benchmark %s\n",(orcs_engine.use_pin)     ? "PIN" 
+                                                        : (orcs_engine.use_spike) ? "SPIKE" 
+                                                        : orcs_engine.arg_trace_file_name[cpu].c_str());
         final_report+=report;
 
         kilo_instructions_simulated += orcs_engine.trace_reader[cpu].get_fetch_instructions() / 1000.0;
@@ -218,7 +223,7 @@ int main(int argc, char **argv) {
         //trace_reader
         //==================
         orcs_engine.trace_reader[i].set_processor_id(i);
-        if(orcs_engine.use_pin == false)
+        if((orcs_engine.use_pin == false) && (orcs_engine.use_spike == false))
         {
             orcs_engine.trace_reader[i].allocate((char*)orcs_engine.arg_trace_file_name[i].c_str());
         }else {
@@ -275,7 +280,7 @@ int main(int argc, char **argv) {
         kilo_instructions_simulated += orcs_engine.trace_reader[cpu].get_fetch_instructions() / 1000.0;
     }
     
-    if(orcs_engine.use_pin)
+    if(orcs_engine.use_pin || orcs_engine.use_spike)
     {
         FullLength += orcs_engine.trace_reader[0].get_fetch_instructions(); 
 

@@ -29,7 +29,7 @@ trace_reader_t::trace_reader_t() {
 
 // =====================================================================
 trace_reader_t::~trace_reader_t() {
-        if(orcs_engine.use_pin)
+        if(orcs_engine.use_pin || orcs_engine.use_spike)
             return;
         gzclose(gzStaticTraceFile);
         gzclose(gzDynamicTraceFile);
@@ -51,7 +51,7 @@ trace_reader_t::~trace_reader_t() {
 
 // =====================================================================
 void trace_reader_t::allocate(char *trace_file) {
-    if(orcs_engine.use_pin) {
+    if(orcs_engine.use_pin || orcs_engine.use_spike) {
         return;
     }
 
@@ -499,6 +499,129 @@ bool trace_reader_t::trace_next_memory(uint64_t *mem_address, uint32_t *mem_size
 }
 
 // =====================================================================
+// RISC-V traces
+bool trace_reader_t::spike_next(opcode_package_t *m) {
+    char next_instruction[1024];
+    char *tmp_ptr = NULL;
+    char *sub_string = NULL;
+
+    uint32_t num_read_regs;
+    uint32_t num_write_regs;
+
+
+    opcode_package_t CleanOpcode;
+
+    if(fgets(next_instruction, 1024, stdin) == NULL) {
+	    ORCS_PRINTF("Could not read SPIKE input\n");
+        return FAIL;
+    }
+
+    if(strstr(next_instruction, "ERROR_ORCS_TRACER") != NULL) {
+        ORCS_PRINTF("Undefined instruction found:\n");
+        ORCS_PRINTF("%s\n", next_instruction);
+        return FAIL;
+    }
+
+    *m = CleanOpcode;
+    sub_string = strtok_r(next_instruction, " ", &tmp_ptr);
+    strcpy(m->opcode_assembly, sub_string);
+
+    // Set instruction_id retrieved from instructions_set's map
+    auto &inst_id = orcs_engine.instruction_set->instructions_id;
+    std::string op_asm = std::string(m->opcode_assembly);
+
+    if (inst_id.find(op_asm) != inst_id.end()) {
+        m->instruction_id = inst_id[op_asm];
+    } else {
+        // Last inst_id has 0 uops, used when instruction is not represented
+        m->instruction_id = inst_id.size() - 1;
+        ORCS_PRINTF("ERROR_ORCS_SIMULATOR: Instruction not defined in OrCS configuration!\n");
+        ORCS_PRINTF("%s\n", op_asm.c_str());
+        return FAIL;
+    }
+
+    sub_string = strtok_r(NULL, " ", &tmp_ptr);
+    m->opcode_operation = static_cast<instruction_operation_t> (std::strtoul(sub_string, NULL, 10));
+    if (m->opcode_operation == -1) {
+        printf("OPCODE -1: %s", next_instruction);
+        exit(1);
+    }
+
+    sub_string = strtok_r(NULL, " ", &tmp_ptr);
+    m->opcode_address = std::strtoull(sub_string, NULL, 10);
+
+    sub_string = strtok_r(NULL, " ", &tmp_ptr);
+    m->opcode_size = std::strtoul(sub_string, NULL, 10);
+
+    sub_string = strtok_r(NULL, " ", &tmp_ptr);
+    num_read_regs = std::strtoul(sub_string, NULL, 10);
+
+
+    for (uint32_t i = 0; i < num_read_regs; ++i) {
+        sub_string = strtok_r(NULL, " ", &tmp_ptr);
+        m->read_regs[i] = std::atoi(sub_string);
+    }
+
+    for (uint32_t i = num_read_regs; i < MAX_REGISTERS; ++i) {
+        m->read_regs[i] = POSITION_FAIL;
+    }
+
+    sub_string = strtok_r(NULL, " ", &tmp_ptr);
+    num_write_regs = std::strtoul(sub_string, NULL, 10);
+
+    for (uint32_t i = 0; i < num_write_regs; ++i) {
+        sub_string = strtok_r(NULL, " ", &tmp_ptr);
+        m->write_regs[i] = std::atoi(sub_string);
+    }
+
+    for (uint32_t i = num_write_regs; i < MAX_REGISTERS; ++i) {
+        m->write_regs[i] = POSITION_FAIL;
+    }
+
+
+    /// Memory reads
+    sub_string = strtok_r(NULL, " ", &tmp_ptr);
+    m->num_reads = std::strtoul(sub_string, NULL, 10);
+
+    for (uint32_t i = 0; i < m->num_reads; ++i) {
+        sub_string = strtok_r(NULL, " ", &tmp_ptr);
+        m->reads_addr[i] = std::strtoull(sub_string, NULL, 10);
+
+        sub_string = strtok_r(NULL, " ", &tmp_ptr);
+        m->reads_size[i] = std::strtoul(sub_string, NULL, 10);
+    }
+
+
+    /// Memory writes
+    sub_string = strtok_r(NULL, " ", &tmp_ptr);
+    m->num_writes = std::strtoul(sub_string, NULL, 10);
+
+    for (uint32_t i = 0; i < m->num_reads; ++i) {
+        sub_string = strtok_r(NULL, " ", &tmp_ptr);
+        m->writes_addr[i] = std::strtoull(sub_string, NULL, 10);
+
+        sub_string = strtok_r(NULL, " ", &tmp_ptr);
+        m->writes_size[i] = std::strtoul(sub_string, NULL, 10);
+    }
+
+
+    /// Branches
+    sub_string = strtok_r(NULL, " ", &tmp_ptr);
+    m->branch_type = static_cast<branch_t> (strtoull(sub_string, NULL, 10));
+
+    // Infos não definidas nesse tipo de traço
+    m->is_indirect = false;
+    m->is_predicated = false;
+    m->is_prefetch = false;
+    m->base_reg  = UINT32_MAX;
+    m->index_reg = UINT32_MAX;
+
+    this->fetch_instructions++;
+    return OK;
+}
+
+
+// =====================================================================
 bool trace_reader_t::pin_next(opcode_package_t *m) {
     char next_instruction[1024];
     char *tmp_ptr = NULL;
@@ -614,6 +737,9 @@ bool trace_reader_t::trace_fetch(opcode_package_t *m) {
     {
         return pin_next(m);
 
+    } else if (orcs_engine.use_spike)
+    {
+        return spike_next(m);
     }
 
     opcode_package_t NewOpcode;

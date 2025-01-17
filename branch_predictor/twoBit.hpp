@@ -4,6 +4,7 @@ class twoBit_t: public predictor_t {
     twoBit_t();
     ~twoBit_t();
     void statistics();
+    using predictor_t::allocate;
     void allocate();
     taken_t predict (uint64_t address);
     void train(uint64_t address,taken_t predict, taken_t correct);
