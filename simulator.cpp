@@ -316,12 +316,12 @@ int main(int argc, char **argv) {
         if (output != NULL){
             utils_t::largeSeparator(output);
             fprintf(output,"Statistics of Core %d\n",i);
-            if(close)fclose(output);
             orcs_engine.trace_reader[i].statistics();
             orcs_engine.processor[i].statistics();
             orcs_engine.branchPredictor[i].statistics();
             orcs_engine.cacheManager->statistics(i);
             utils_t::largeSeparator(output);
+            if(close)fclose(output);
         }
     }
     orcs_engine.memory_controller->statistics();    

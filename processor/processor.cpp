@@ -71,6 +71,9 @@ processor_t::processor_t()
 	this->LATENCY_INTEGER_ALU = 0;
 	this->WAIT_NEXT_INT_ALU = 0;
 	this->INTEGER_ALU = 0;
+
+	this->LATENCY_BRANCH = 0;
+
 	// INTEGER MUL
 	this->LATENCY_INTEGER_MUL = 0;
 	this->WAIT_NEXT_INT_MUL = 0;
@@ -110,6 +113,7 @@ processor_t::processor_t()
 	this->RAT_SIZE = 0;
 	this->ROB_SIZE = 0;
 	this->UNIFIED_RS = 0;
+	this->UOPS_LINK_REGISTER = 0;
 	//MOB
 	this->MOB_READ = 0;
 	this->MOB_WRITE = 0;
@@ -377,6 +381,8 @@ void processor_t::allocate()
 	set_WAIT_NEXT_INT_ALU(cfg_processor["WAIT_NEXT_INT_ALU"]);
 	set_INTEGER_ALU(cfg_processor["INTEGER_ALU"]);
 
+	set_LATENCY_BRANCH(cfg_processor["LATENCY_BRANCH"]);
+
 	set_LATENCY_INTEGER_MUL(cfg_processor["LATENCY_INTEGER_MUL"]);
 	set_WAIT_NEXT_INT_MUL(cfg_processor["WAIT_NEXT_INT_MUL"]);
 	set_INTEGER_MUL(cfg_processor["INTEGER_MUL"]);
@@ -409,6 +415,7 @@ void processor_t::allocate()
 	set_RAT_SIZE(cfg_processor["RAT_SIZE"]);
 	set_ROB_SIZE(cfg_processor["ROB_SIZE"]);
 	set_UNIFIED_RS(cfg_processor["UNIFIED_RS"]);
+	set_UOPS_LINK_REGISTER(get_RAT_SIZE() - 1);
 
 	set_MOB_READ(cfg_processor["MOB_READ"]);
 	set_MOB_WRITE(cfg_processor["MOB_WRITE"]);
@@ -970,6 +977,9 @@ uint64_t instructions_mshr_stall = 0;
 void processor_t::fetch()
 {
 
+	#if FETCH_DEBUG
+		ORCS_PRINTF("Fetch Stage\n")
+	#endif
 	opcode_package_t operation;
 	// uint32_t position;
 	// Trace ->fetchBuffer
@@ -979,6 +989,7 @@ void processor_t::fetch()
 		{
 			instructions_mshr_stall++;
 		}
+
 		if (orcs_engine.cacheManager->available(this->processor_id, MEMORY_OPERATION_INST))
 		{
 			operation.package_clean();
@@ -993,6 +1004,7 @@ void processor_t::fetch()
 				this->add_stall_full_FetchBuffer();
 				break;
 			}
+
 			//=============================
 			//Stall branch wrong predict
 			//=============================
@@ -1000,6 +1012,7 @@ void processor_t::fetch()
 			{
 				break;
 			}
+
 			//=============================
 			//Get new Opcode
 			//=============================
@@ -1009,7 +1022,6 @@ void processor_t::fetch()
 				break;
 			}
 
-
 			// * ============================ * //
 
 			//============================
@@ -1018,7 +1030,6 @@ void processor_t::fetch()
 			operation.readyAt = orcs_engine.get_global_cycle() + FETCH_LATENCY;
 			operation.opcode_number = this->fetchCounter;
 			this->fetchCounter++;
-
 #if FETCH_DEBUG
 				ORCS_PRINTF("%s - Opcode Fetched Opcode Number %lu %s\n", operation.opcode_assembly,
 							operation.opcode_number,
@@ -1042,6 +1053,7 @@ void processor_t::fetch()
 				operation.updatePackageWait(stallWrongBranch);
 				this->previousBranch.package_clean();
 			}
+
 			//============================
 			// Operation Branch, set flag
 			//============================
@@ -1051,6 +1063,7 @@ void processor_t::fetch()
 				this->previousBranch = operation;
 				this->hasBranch = true;
 			}
+
 			//============================
 			//Insert into fetch buffer
 			//============================
@@ -1132,13 +1145,15 @@ void processor_t::fetch()
 	To maintain the right dependencies between the uops and opcodes
 	If the opcode generates multiple uops, they must be in this format:
 
+	UOPS_LINK_REGISTER = RAT_SIZE - 1 (Register to link uops)
+
 	READ    ReadRegs    = BaseRegs + IndexRegs
-			WriteRegs   = 258 (Aux Register)
+			WriteRegs   = UOPS_LINK_REGISTER (Aux Register)
 
-	ALU     ReadRegs    = * + 258 (Aux Register) (if is_read)
-			WriteRegs   = * + 258 (Aux Register) (if is_write)
+	ALU     ReadRegs    = * + UOPS_LINK_REGISTER (Aux Register) (if is_read)
+			WriteRegs   = * + UOPS_LINK_REGISTER (Aux Register) (if is_write)
 
-	WRITE   ReadRegs    = * + 258 (Aux Register)
+	WRITE   ReadRegs    = * + UOPS_LINK_REGISTER (Aux Register)
 			WriteRegs   = NULL
 	============================================================================
 */
@@ -1173,8 +1188,6 @@ void processor_t::decode()
 		{
 			break;
 		}
-
-
 
 
 		if ((get_HAS_HIVE() && instr->is_hive) ||
@@ -1223,11 +1236,11 @@ void processor_t::decode()
 			is_masked = true;
 		}
 
-
 		ERROR_ASSERT_PRINTF(this->decodeCounter == instr->opcode_number,
 							"Trying decode out-of-order");
 
 		this->decodeCounter++;
+
 
 		// HIVE
 		if (get_HAS_HIVE())
@@ -1260,7 +1273,7 @@ void processor_t::decode()
 				statusInsert = this->decodeBuffer.push_back(new_uop);
 
 #if DECODE_DEBUG
-					ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
+					ORCS_PRINTF("TYPE 1: uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
 #endif
 
 				ERROR_ASSERT_PRINTF(statusInsert != POSITION_FAIL,
@@ -1294,7 +1307,7 @@ void processor_t::decode()
 				statusInsert = this->decodeBuffer.push_back(new_uop);
 
 #if DECODE_DEBUG
-					ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
+					ORCS_PRINTF("TYPE 2: uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
 #endif
 
 				ERROR_ASSERT_PRINTF(statusInsert != POSITION_FAIL,
@@ -1327,7 +1340,7 @@ void processor_t::decode()
 				statusInsert = this->decodeBuffer.push_back(new_uop);
 
 #if DECODE_DEBUG
-					ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
+					ORCS_PRINTF("TYPE 3: uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
 #endif
 
 				ERROR_ASSERT_PRINTF(statusInsert != POSITION_FAIL,
@@ -1376,7 +1389,7 @@ void processor_t::decode()
 				statusInsert = this->decodeBuffer.push_back(new_uop);
 
 #if DECODE_DEBUG
-					ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
+					ORCS_PRINTF("TYPE 4: uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
 #endif
 
 #if VIMA_DEBUG
@@ -1395,8 +1408,10 @@ void processor_t::decode()
 		// ===================
 		// Get operation uops:
 		// ===================
+
 		uint32_t instr_id = instr->instruction_id;
 		std::vector<uint32_t> &uops = instr_set->uops_per_instruction[instr_id];
+
 
 		// =====================
 		// Decode Reads
@@ -1433,8 +1448,8 @@ void processor_t::decode()
 				{
 					new_uop.write_regs[i] = POSITION_FAIL;
 				}
-				/// Insert 258 into WRegs
-				new_uop.write_regs[0] = 258;
+				/// Insert UOPS_LINK_REGISTER into WRegs
+				new_uop.write_regs[0] = UOPS_LINK_REGISTER;
 			}
 
 			new_uop.updatePackageWait(DECODE_LATENCY);
@@ -1444,7 +1459,7 @@ void processor_t::decode()
 
 
 			#if DECODE_DEBUG
-				ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
+				ORCS_PRINTF("TYPE 5: uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
 			#endif
 			ERROR_ASSERT_PRINTF(statusInsert != POSITION_FAIL,
 								"Erro, Tentando decodificar mais uops que o maximo permitido");
@@ -1484,8 +1499,8 @@ void processor_t::decode()
 				{
 					new_uop.write_regs[i] = POSITION_FAIL;
 				}
-				/// Insert 258 into WRegs
-				new_uop.write_regs[0] = 258;
+				/// Insert UOPS_LINK_REGISTER into WRegs
+				new_uop.write_regs[0] = UOPS_LINK_REGISTER;
 			}
 
 			new_uop.updatePackageWait(DECODE_LATENCY);
@@ -1494,7 +1509,7 @@ void processor_t::decode()
 			statusInsert = this->decodeBuffer.push_back(new_uop);
 
 			#if DECODE_DEBUG
-				ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
+				ORCS_PRINTF("TYPE 6: uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
 			#endif
 			ERROR_ASSERT_PRINTF(statusInsert != POSITION_FAIL,
 								"Erro, Tentando decodificar mais uops que o maximo permitido");
@@ -1531,14 +1546,15 @@ void processor_t::decode()
 					new_uop.uop_operation = INSTRUCTION_OPERATION_OTHER;
 				}
 
+
 				++uops_created;
 				if (instr->num_reads > 0)
 				{
-					// The uop for the memory load is writing in the register 258
+					// The uop for the memory load is writing in the register UOPS_LINK_REGISTER
 					// its a dependency between uops of the same instruction.
 
 					// ===== Read Regs =============================================
-					// registers /258 aux onde pos[i] = fail
+					// registers /UOPS_LINK_REGISTER aux onde pos[i] = fail
 					/// Clear RRegs
 					// Just the reads consume base and index regs
 					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
@@ -1546,14 +1562,14 @@ void processor_t::decode()
 						new_uop.read_regs[i] = POSITION_FAIL;
 					}
 
-					bool inserted_258 = false;
+					bool inserted_UOPS_LINK_REGISTER = false;
 					int32_t pos = 0;
 					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
 					{
 						if (instr->read_regs[i] == POSITION_FAIL)
 						{
-							new_uop.read_regs[pos] = 258;
-							inserted_258 = true;
+							new_uop.read_regs[pos] = UOPS_LINK_REGISTER;
+							inserted_UOPS_LINK_REGISTER = true;
 							break;
 						}
 						// Em RISC-V vai adicionar todos :P
@@ -1564,30 +1580,30 @@ void processor_t::decode()
 							}
 						
 					}
-					ERROR_ASSERT_PRINTF(inserted_258,
-										"Could not insert register_258, all MAX_REGISTERS(%d) used.\n",
-										MAX_REGISTERS);
+					ERROR_ASSERT_PRINTF(inserted_UOPS_LINK_REGISTER,
+										"Could not insert register_%d, all MAX_REGISTERS(%d) used.\n",
+										UOPS_LINK_REGISTER, MAX_REGISTERS);
 				}
 
 				if ((instr->num_writes > 0) || (instr_op == INSTRUCTION_OPERATION_BRANCH))
 				{
 					// There will be another uop after this list.
-					// Se adding a dependecy for it in register 258
+					// Se adding a dependecy for it in register UOPS_LINK_REGISTER
 					// ===== Write Regs =============================================
-					//registers /258 aux onde pos[i] = fail
-					bool inserted_258 = false;
+					//registers /UOPS_LINK_REGISTER aux onde pos[i] = fail
+					bool inserted_UOPS_LINK_REGISTER = false;
 					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
 					{
 						if (new_uop.write_regs[i] == POSITION_FAIL)
 						{
-							new_uop.write_regs[i] = 258;
-							inserted_258 = true;
+							new_uop.write_regs[i] = UOPS_LINK_REGISTER;
+							inserted_UOPS_LINK_REGISTER = true;
 							break;
 						}
 					}
-					ERROR_ASSERT_PRINTF(inserted_258,
-										"Could not insert register_258, all MAX_REGISTERS(%d) used.\n",
-										MAX_REGISTERS);
+					ERROR_ASSERT_PRINTF(inserted_UOPS_LINK_REGISTER,
+										"Could not insert register_%d, all MAX_REGISTERS(%d) used.\n",
+										UOPS_LINK_REGISTER, MAX_REGISTERS);
 				}
 
 
@@ -1597,11 +1613,12 @@ void processor_t::decode()
 				statusInsert = this->decodeBuffer.push_back(new_uop);
 
 				#if DECODE_DEBUG
-					ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
+					ORCS_PRINTF("TYPE 7: uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
 				#endif
 				ERROR_ASSERT_PRINTF(statusInsert != POSITION_FAIL,
 									"Erro, Tentando decodificar mais uops que o maximo permitido");
 			}
+
 		/*}*/
 		// =====================
 		//Decode Branch
@@ -1612,7 +1629,7 @@ void processor_t::decode()
 			new_uop.package_clean();
 			new_uop.opcode_to_uop(this->uopCounter++,
 								  INSTRUCTION_OPERATION_BRANCH,
-								  this->LATENCY_INTEGER_ALU, this->WAIT_NEXT_INT_ALU, &(this->functional_units[0]),
+								  this->LATENCY_BRANCH, this->functional_units[0].wait_next, &(this->functional_units[0]),
 								  *instr, uops_created, is_masked);
 
 			// Precisa dessa operação vazia?
@@ -1621,23 +1638,23 @@ void processor_t::decode()
 
 			if ((instr->num_reads > 0) || (uops.size() > 0))
 			{
-				// There were other uops sent before. Link them with register 258
+				// There were other uops sent before. Link them with register UOPS_LINK_REGISTER
 
 				// ===== Read Regs =============================================
-				/// Insert Reg258 into RReg
-				bool inserted_258 = false;
+				/// Insert RegUOPS_LINK_REGISTER into RReg
+				bool inserted_UOPS_LINK_REGISTER = false;
 				for (uint32_t i = 0; i < MAX_REGISTERS; i++)
 				{
 					if (new_uop.read_regs[i] == POSITION_FAIL)
 					{
-						new_uop.read_regs[i] = 258;
-						inserted_258 = true;
+						new_uop.read_regs[i] = UOPS_LINK_REGISTER;
+						inserted_UOPS_LINK_REGISTER = true;
 						break;
 					}
 				}
 
-				ERROR_ASSERT_PRINTF(inserted_258,
-									"Could not insert register_258, all MAX_REGISTERS(%d) used.", MAX_REGISTERS);
+				ERROR_ASSERT_PRINTF(inserted_UOPS_LINK_REGISTER,
+									"Could not insert register_%d, all MAX_REGISTERS(%d) used.", UOPS_LINK_REGISTER, MAX_REGISTERS);
 			}
 
 			if (instr->num_writes > 0)
@@ -1645,19 +1662,19 @@ void processor_t::decode()
 				// There will be an write uop after this branch uop, both from the same instruction.
 
 				// ===== Write Regs =============================================
-				//registers /258 aux onde pos[i] = fail
-				bool inserted_258 = false;
+				//registers /UOPS_LINK_REGISTER aux onde pos[i] = fail
+				bool inserted_UOPS_LINK_REGISTER = false;
 				for (uint32_t i = 0; i < MAX_REGISTERS; i++)
 				{
 					if (new_uop.write_regs[i] == POSITION_FAIL)
 					{
-						new_uop.write_regs[i] = 258;
-						inserted_258 = true;
+						new_uop.write_regs[i] = UOPS_LINK_REGISTER;
+						inserted_UOPS_LINK_REGISTER = true;
 						break;
 					}
 				}
 
-				ERROR_ASSERT_PRINTF(inserted_258,
+				ERROR_ASSERT_PRINTF(inserted_UOPS_LINK_REGISTER,
 									"Todos Max regs usados. %u \n", MAX_REGISTERS);
 			}
 
@@ -1668,7 +1685,7 @@ void processor_t::decode()
 
 
 #if DECODE_DEBUG
-				ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
+				ORCS_PRINTF("TYPE 8: uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
 #endif
 
 			ERROR_ASSERT_PRINTF(statusInsert != POSITION_FAIL,
@@ -1695,23 +1712,23 @@ void processor_t::decode()
 
 				++uops_created;
 
-				// There was a previous uops from the same instruction. The last wrote in the 258 register.
+				// There was a previous uops from the same instruction. The last wrote in the UOPS_LINK_REGISTER register.
 				if ((uops.size() > 0) || (instr_op == INSTRUCTION_OPERATION_BRANCH) || (instr->num_reads > 0))
 				{
 					// Create a dependency with the previous uop from the same instruction
-					bool inserted_258 = false;
+					bool inserted_UOPS_LINK_REGISTER = false;
 					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
 					{
 						new_uop.read_regs[i] = POSITION_FAIL;
 					}
-					/// Insert 258 into WRegs
-					new_uop.read_regs[0] = 258;
-					inserted_258 = true;
+					/// Insert UOPS_LINK_REGISTER into WRegs
+					new_uop.read_regs[0] = UOPS_LINK_REGISTER;
+					inserted_UOPS_LINK_REGISTER = true;
 
 
 
-					ERROR_ASSERT_PRINTF(inserted_258,
-										"Could not insert register_258, all MAX_REGISTERS(%d) used.", MAX_REGISTERS)
+					ERROR_ASSERT_PRINTF(inserted_UOPS_LINK_REGISTER,
+										"Could not insert register_%d, all MAX_REGISTERS(%d) used.", UOPS_LINK_REGISTER, MAX_REGISTERS)
 
 					// ===== Write Regs =============================================
 					/// Clear WRegs
@@ -1730,7 +1747,7 @@ void processor_t::decode()
 
 
 #if DECODE_DEBUG
-					ORCS_PRINTF("uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
+					ORCS_PRINTF("TYPE 9: uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
 #endif
 
 				ERROR_ASSERT_PRINTF(statusInsert != POSITION_FAIL,
@@ -1750,8 +1767,12 @@ void processor_t::decode()
 #endif
 		}
 
+
 		this->fetchBuffer.pop_front();
+	
+
 	}
+
 }
 
 // ============================================================================
@@ -1805,6 +1826,10 @@ void processor_t::update_registers(reorder_buffer_line_t *new_rob_line)
 //bool travado = false;
 void processor_t::rename()
 {
+	#if RENAME_DEBUG
+		ORCS_PRINTF("Rename Stage\n")
+	#endif
+
 	size_t i;
 	int32_t pos_rob, pos_mob = POSITION_FAIL;
 	uint32_t MOB_LIMIT = 0;
@@ -1817,8 +1842,9 @@ void processor_t::rename()
 		pos_mob = POSITION_FAIL;
 
 
-		// Checando se há uop decodificado, se está pronto, e se o ciclo de pronto
-		// é maior ou igual ao atual
+		// Checando se há uop decodificado
+		// -> se está pronto
+		// -> e se o ciclo de pronto é maior ou igual ao atual
 		if (this->decodeBuffer.is_empty() ||
 			this->decodeBuffer.front()->status != PACKAGE_STATE_WAIT ||
 			this->decodeBuffer.front()->readyAt > orcs_engine.get_global_cycle())
@@ -2281,6 +2307,9 @@ void processor_t::rename()
 // ============================================================================
 void processor_t::dispatch()
 {
+	#if DISPATCH_DEBUG
+		ORCS_PRINTF("Dispatch Stage\n")
+	#endif
 	uint32_t total_dispatched = 0;
 
 	for (auto &fu : this->functional_units)
@@ -2354,6 +2383,7 @@ void processor_t::dispatch()
 				rob_line->uop.uop_operation == INSTRUCTION_OPERATION_HMC_ROWA ||
 				rob_line->uop.uop_operation == INSTRUCTION_OPERATION_LAST)
 			{
+				std::cout << rob_line->uop.content_to_string() << std::endl;
 				ERROR_PRINTF("Invalid instruction LAST||BARRIER||HMC_ROA||HMC_ROWA being dispatched.\n");
 				continue;
 			}
@@ -2544,6 +2574,7 @@ void processor_t::clean_mob_read()
 // ============================================================================
 void processor_t::execute()
 {
+
 #if EXECUTE_DEBUG
 	if (orcs_engine.get_global_cycle() > WAIT_CYCLE)
 	{

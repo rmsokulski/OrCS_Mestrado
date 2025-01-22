@@ -60,6 +60,8 @@ class orcs_engine_t {
         double stat_rss_allocate;
         double stat_rss_end;
         double stat_rss_max;
+
+
         // ====================================================================
 		/// Methods
 		// ====================================================================

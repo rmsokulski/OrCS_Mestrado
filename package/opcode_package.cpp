@@ -134,4 +134,29 @@ std::string opcode_package_t::content_to_string2() {
     return content_string;
 }
 
+
+std::string opcode_package_t::log_registers() {
+    std::string content_string;
+
+    content_string = std::string("log_registers::") + std::string(this->opcode_assembly) + std::string(" R (");
+    for (int i=0; i < MAX_REGISTERS && this->read_regs[i] != POSITION_FAIL; ++i) {
+        if (i != 0) {
+            content_string += ", ";
+        }
+        content_string += std::to_string(this->read_regs[i]);
+    }
+
+    content_string += ") W (";
+    for (int i=0; i < MAX_REGISTERS && this->write_regs[i] != POSITION_FAIL; ++i) {
+        if (i != 0) {
+            content_string += ", ";
+        }
+        content_string += std::to_string(this->write_regs[i]);
+    }
+    
+    content_string += ")";
+
+    return content_string;
+}
+
 #endif // ifndef __PIN__

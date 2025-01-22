@@ -25,6 +25,12 @@ trace_reader_t::trace_reader_t() {
         //get total opcodes
     this->trace_opcode_max=0;
 
+    // Trace registers info
+    this->max_INT_register_value = INT32_MIN;
+    this->min_INT_register_value = INT32_MAX;
+    this->max_FP_register_value  = INT32_MIN;
+    this->min_FP_register_value  = INT32_MAX;
+
 }
 
 // =====================================================================
@@ -502,33 +508,40 @@ bool trace_reader_t::trace_next_memory(uint64_t *mem_address, uint32_t *mem_size
 // RISC-V traces
 bool trace_reader_t::spike_next(opcode_package_t *m) {
     char next_instruction[1024];
+    char next_instruction_save[1024];
     char *tmp_ptr = NULL;
     char *sub_string = NULL;
 
     uint32_t num_read_regs;
     uint32_t num_write_regs;
 
-
     opcode_package_t CleanOpcode;
 
     if(fgets(next_instruction, 1024, stdin) == NULL) {
-	    ORCS_PRINTF("Could not read SPIKE input\n");
+        // After last instruction
+	    // ORCS_PRINTF("Could not read SPIKE input\n");
         return FAIL;
     }
+
+    strncpy(next_instruction_save, next_instruction, 1024);
+
 
     if(strstr(next_instruction, "ERROR_ORCS_TRACER") != NULL) {
         ORCS_PRINTF("Undefined instruction found:\n");
         ORCS_PRINTF("%s\n", next_instruction);
-        return FAIL;
+        exit(1);
     }
+
 
     *m = CleanOpcode;
     sub_string = strtok_r(next_instruction, " ", &tmp_ptr);
     strcpy(m->opcode_assembly, sub_string);
 
+
     // Set instruction_id retrieved from instructions_set's map
     auto &inst_id = orcs_engine.instruction_set->instructions_id;
     std::string op_asm = std::string(m->opcode_assembly);
+
 
     if (inst_id.find(op_asm) != inst_id.end()) {
         m->instruction_id = inst_id[op_asm];
@@ -537,8 +550,9 @@ bool trace_reader_t::spike_next(opcode_package_t *m) {
         m->instruction_id = inst_id.size() - 1;
         ORCS_PRINTF("ERROR_ORCS_SIMULATOR: Instruction not defined in OrCS configuration!\n");
         ORCS_PRINTF("%s\n", op_asm.c_str());
-        return FAIL;
+        exit(1);
     }
+
 
     sub_string = strtok_r(NULL, " ", &tmp_ptr);
     m->opcode_operation = static_cast<instruction_operation_t> (std::strtoul(sub_string, NULL, 10));
@@ -546,6 +560,7 @@ bool trace_reader_t::spike_next(opcode_package_t *m) {
         printf("OPCODE -1: %s", next_instruction);
         exit(1);
     }
+
 
     sub_string = strtok_r(NULL, " ", &tmp_ptr);
     m->opcode_address = std::strtoull(sub_string, NULL, 10);
@@ -556,10 +571,45 @@ bool trace_reader_t::spike_next(opcode_package_t *m) {
     sub_string = strtok_r(NULL, " ", &tmp_ptr);
     num_read_regs = std::strtoul(sub_string, NULL, 10);
 
-
     for (uint32_t i = 0; i < num_read_regs; ++i) {
         sub_string = strtok_r(NULL, " ", &tmp_ptr);
         m->read_regs[i] = std::atoi(sub_string);
+
+        // LOG *************************
+        if ((!strcmp(m->opcode_assembly, "c.fsd")) ||
+            (!strcmp(m->opcode_assembly, "fsd"))) {
+
+            if (i == 0) { // Only the 2º is FP (and only in reads)
+                if (this->max_INT_register_value < m->read_regs[i]) {
+                    this->max_INT_register_value = m->read_regs[i];
+                }
+
+                if (this->min_INT_register_value > m->read_regs[i]) {
+                    this->min_INT_register_value = m->read_regs[i];
+                }
+            } else {
+
+                if (this->max_FP_register_value < m->read_regs[i]) {
+                    this->max_FP_register_value = m->read_regs[i];
+                }
+
+                if (this->min_FP_register_value > m->read_regs[i]) {
+                    this->min_FP_register_value = m->read_regs[i];
+                }
+            }
+        } else {
+
+            if (this->max_INT_register_value < m->read_regs[i]) {
+                this->max_INT_register_value = m->read_regs[i];
+            }
+
+            if (this->min_INT_register_value > m->read_regs[i]) {
+                this->min_INT_register_value = m->read_regs[i];
+            }
+
+        } 
+
+        // *****************************
     }
 
     for (uint32_t i = num_read_regs; i < MAX_REGISTERS; ++i) {
@@ -572,12 +622,22 @@ bool trace_reader_t::spike_next(opcode_package_t *m) {
     for (uint32_t i = 0; i < num_write_regs; ++i) {
         sub_string = strtok_r(NULL, " ", &tmp_ptr);
         m->write_regs[i] = std::atoi(sub_string);
+
+        // LOG *************************
+        if (this->max_INT_register_value < m->write_regs[i]) {
+            this->max_INT_register_value = m->write_regs[i];
+        }
+
+        if (this->min_INT_register_value > m->write_regs[i]) {
+            this->min_INT_register_value = m->write_regs[i];
+        }
+        // *****************************
+
     }
 
     for (uint32_t i = num_write_regs; i < MAX_REGISTERS; ++i) {
         m->write_regs[i] = POSITION_FAIL;
     }
-
 
     /// Memory reads
     sub_string = strtok_r(NULL, " ", &tmp_ptr);
@@ -589,21 +649,20 @@ bool trace_reader_t::spike_next(opcode_package_t *m) {
 
         sub_string = strtok_r(NULL, " ", &tmp_ptr);
         m->reads_size[i] = std::strtoul(sub_string, NULL, 10);
-    }
 
+    }
 
     /// Memory writes
     sub_string = strtok_r(NULL, " ", &tmp_ptr);
     m->num_writes = std::strtoul(sub_string, NULL, 10);
 
-    for (uint32_t i = 0; i < m->num_reads; ++i) {
+    for (uint32_t i = 0; i < m->num_writes; ++i) {
         sub_string = strtok_r(NULL, " ", &tmp_ptr);
         m->writes_addr[i] = std::strtoull(sub_string, NULL, 10);
 
         sub_string = strtok_r(NULL, " ", &tmp_ptr);
         m->writes_size[i] = std::strtoul(sub_string, NULL, 10);
     }
-
 
     /// Branches
     sub_string = strtok_r(NULL, " ", &tmp_ptr);
@@ -615,6 +674,10 @@ bool trace_reader_t::spike_next(opcode_package_t *m) {
     m->is_prefetch = false;
     m->base_reg  = UINT32_MAX;
     m->index_reg = UINT32_MAX;
+
+
+
+    //std::cout << m->log_registers() << std::endl;
 
     this->fetch_instructions++;
     return OK;
@@ -818,6 +881,14 @@ void trace_reader_t::statistics() {
         utils_t::largestSeparator(output);
         fprintf(output,"trace_reader_t\n");
         fprintf(output,"fetch_instructions: %lu\n", this->fetch_instructions);
+
+        fprintf(output,"** Adjusted to RISC-V Hello World (SPIKE) **\n");
+        fprintf(output,"max_INT_register_value: %d\n", this->max_INT_register_value);
+        fprintf(output,"min_INT_register_value: %d\n", this->min_INT_register_value);
+
+        fprintf(output,"max_FP_register_value: %d\n", this->max_FP_register_value);
+        fprintf(output,"min_FP_register_value: %d\n", this->min_FP_register_value);
+
         utils_t::largestSeparator(output);
     }
 
