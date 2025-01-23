@@ -3,7 +3,7 @@ class twoBit_t: public predictor_t {
     public:
     twoBit_t();
     ~twoBit_t();
-    void statistics();
+    void statistics(FILE *output);
     using predictor_t::allocate;
     void allocate();
     taken_t predict (uint64_t address);

@@ -4,7 +4,7 @@ class desambiguation_t {
         virtual void allocate(){};
         virtual void make_memory_dependences(memory_order_buffer_line_t*){};
         virtual void solve_memory_dependences(memory_order_buffer_line_t*){};
-        virtual void statistics(){};
+        virtual void statistics([[maybe_unused]] FILE *output){};
         virtual void reset_statistics(){};
 };
 

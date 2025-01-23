@@ -7,4 +7,4 @@ twoBit_t::~twoBit_t(){
     
 }
 void twoBit_t::allocate() {}
-void twoBit_t::statistics() {}
+void twoBit_t::statistics(FILE *output) {}

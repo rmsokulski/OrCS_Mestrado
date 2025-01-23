@@ -261,7 +261,7 @@ class processor_t {
 		~processor_t();
 	    void allocate();
         void clock();
-		void statistics();
+		void statistics(FILE *output);
 		void reset_statistics();
 		void printConfiguration();
 		void printCache(FILE *output);

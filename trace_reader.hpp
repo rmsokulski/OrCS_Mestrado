@@ -44,7 +44,7 @@ class trace_reader_t {
         trace_reader_t();
         ~trace_reader_t();
         void allocate(char *trace_file_name);
-        void statistics();
+        void statistics(FILE *output);
 
         /// Generate the static dictionary
         void get_total_bbls();

@@ -506,6 +506,7 @@ bool trace_reader_t::trace_next_memory(uint64_t *mem_address, uint32_t *mem_size
 
 // =====================================================================
 // RISC-V traces
+FILE *out_trace = NULL;
 bool trace_reader_t::spike_next(opcode_package_t *m) {
     char next_instruction[1024];
     char next_instruction_save[1024];
@@ -517,11 +518,18 @@ bool trace_reader_t::spike_next(opcode_package_t *m) {
 
     opcode_package_t CleanOpcode;
 
+
+    if (out_trace == NULL) out_trace = fopen("trace_out.txt", "w");
+
     if(fgets(next_instruction, 1024, stdin) == NULL) {
         // After last instruction
 	    // ORCS_PRINTF("Could not read SPIKE input\n");
         return FAIL;
     }
+
+    fprintf(out_trace, "%s", next_instruction);
+
+
 
     strncpy(next_instruction_save, next_instruction, 1024);
 
@@ -868,15 +876,8 @@ bool trace_reader_t::trace_fetch(opcode_package_t *m) {
 }
 
 // =====================================================================
-void trace_reader_t::statistics() {
-    bool close = false;
-	FILE *output = stdout;
-
-	if (orcs_engine.output_file_name != NULL) {
-		output = fopen(orcs_engine.output_file_name,"a+");
-		close=true;
-	}
-
+void trace_reader_t::statistics(FILE *output) {
+    
 	if (output != NULL) {
         utils_t::largestSeparator(output);
         fprintf(output,"trace_reader_t\n");
@@ -892,8 +893,6 @@ void trace_reader_t::statistics() {
         utils_t::largestSeparator(output);
     }
 
-    if (close)
-        fclose(output);
 }
 
 

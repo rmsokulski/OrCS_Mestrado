@@ -128,14 +128,8 @@ void memory_controller_t::allocate(){
     this->set_masks();
 }
 // ============================================================================
-void memory_controller_t::statistics(){
-    FILE *output = stdout;
-    bool close = false;
-
-    if(orcs_engine.output_file_name != NULL){
-        close=true;
-		output = fopen(orcs_engine.output_file_name,"a+");
-    }
+void memory_controller_t::statistics(FILE *output){
+    
 	if (output != NULL){
         uint32_t total_rb_hits = 0, total_rb_misses = 0;
         utils_t::largestSeparator(output);
@@ -169,7 +163,6 @@ void memory_controller_t::statistics(){
             }
         }
         utils_t::largestSeparator(output);
-        if(close) fclose(output);
     }
 }// ============================================================================
 void memory_controller_t::reset_statistics(){

@@ -129,13 +129,8 @@ void branch_predictor_t::reset_statistics() {
 	this->branchNotTakenMiss = 0;
 }
 
-void branch_predictor_t::statistics() {
-	bool close = false;
-	FILE *output = stdout;
-	if(orcs_engine.output_file_name != NULL) {
-		output = fopen(orcs_engine.output_file_name,"a+");
-		close=true;	
-	}
+void branch_predictor_t::statistics(FILE *output) {
+
 	if (output != NULL) {
 		utils_t::largestSeparator(output);
 		fprintf(output,"#Branch Prodiction\n");
@@ -150,7 +145,7 @@ void branch_predictor_t::statistics() {
 		fprintf(output,"Correct Branchs Not Taken:   %u\n",(this->branchNotTaken-this->branchNotTakenMiss));
 		fprintf(output,"Incorrect Branchs Not Taken: %u\n",this->branchNotTakenMiss);
 	}
-	if(close) fclose(output);
+
 }
 
 uint32_t branch_predictor_t::solveBranch(opcode_package_t branchInstrucion, opcode_package_t nextInstruction) {

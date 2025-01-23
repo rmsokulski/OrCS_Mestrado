@@ -327,18 +327,18 @@ void hive_controller_t::allocate(){
     this->last_instruction = 0;
 }
 
-void hive_controller_t::statistics(){
-    ORCS_PRINTF ("#==============HIVE Controller==========================================#\n")
+void hive_controller_t::statistics(FILE *output){
+   fprintf(output,"#==============HIVE Controller==========================================#\n");
     for (int i = 0; i < MEMORY_OPERATION_LAST; i++){
         if (this->instruction_count[i] > 0){
-            ORCS_PRINTF ("Total_%s_Instructions: %u\n", get_enum_memory_operation_char ((memory_operation_t) i), this->instruction_count[i]);
-            ORCS_PRINTF ("Avg._%s_Latency:       %u\n", get_enum_memory_operation_char ((memory_operation_t) i), this->total_latency_count[i]/this->instruction_count[i]);
-            ORCS_PRINTF ("Min._%s_Latency:       %u\n", get_enum_memory_operation_char ((memory_operation_t) i), this->min_latency_count[i]);
-            ORCS_PRINTF ("Max._%s_Latency:       %u\n", get_enum_memory_operation_char ((memory_operation_t) i), this->max_latency_count[i]);
+           fprintf(output,"Total_%s_Instructions: %u\n", get_enum_memory_operation_char ((memory_operation_t) i), this->instruction_count[i]);
+           fprintf(output,"Avg._%s_Latency:       %u\n", get_enum_memory_operation_char ((memory_operation_t) i), this->total_latency_count[i]/this->instruction_count[i]);
+           fprintf(output,"Min._%s_Latency:       %u\n", get_enum_memory_operation_char ((memory_operation_t) i), this->min_latency_count[i]);
+           fprintf(output,"Max._%s_Latency:       %u\n", get_enum_memory_operation_char ((memory_operation_t) i), this->max_latency_count[i]);
         }
     }
-    ORCS_PRINTF ("Avg._Latency_Between_Locks:      %lu\n", this->op_count_latency/this->op_set_count)
-    ORCS_PRINTF ("#========================================================================#\n")
+   fprintf(output,"Avg._Latency_Between_Locks:      %lu\n", this->op_count_latency/this->op_set_count);
+   fprintf(output,"#========================================================================#\n");
 }
 
 void hive_controller_t::reset_statistics(){

@@ -971,7 +971,7 @@ void processor_t::remove_back_mob_write()
 }
 // ============================================================================
 
-uint64_t inst_requests = 0;
+uint64_t fetch_CacheManager_Inst_requests = 0;
 uint64_t instructions_mshr_stall = 0;
 
 void processor_t::fetch()
@@ -1109,7 +1109,7 @@ void processor_t::fetch()
 #if MEMORY_DEBUG
 				ORCS_PRINTF("[PROC] %lu {%lu} %lu %s sent to memory.I\n", orcs_engine.get_global_cycle(), request->opcode_number, request->memory_address, get_enum_memory_operation_char(request->memory_operation))
 #endif
-				inst_requests++;
+				fetch_CacheManager_Inst_requests++;
 				if (!orcs_engine.cacheManager->searchData(request))
 					delete request;
 
@@ -3469,23 +3469,15 @@ void processor_t::reset_statistics(){
 }
 // ============================================================================
 // ============================================================================
-void processor_t::statistics()
+void processor_t::statistics(FILE *output)
 {
-	bool close = false;
-	FILE *output = stdout;
-
-	if (orcs_engine.output_file_name != NULL)
-	{
-		output = fopen(orcs_engine.output_file_name, "a+");
-		close = true;
-	}
-
+	
 	if (output != NULL)
 	{
-		printf("Escritas enviadas: %lu\n", escritas_enviadas);
-		printf("Reads MSHR stall: %lu\n", reads_mshr_stall);
-		printf("Write MSHR stall: %lu\n", write_mshr_stall);
-		printf("Inst MSHR stall: %lu\n", instructions_mshr_stall);
+		fprintf(output, "Escritas enviadas: %lu\n", escritas_enviadas);
+		fprintf(output, "Reads MSHR stall: %lu\n", reads_mshr_stall);
+		fprintf(output, "Write MSHR stall: %lu\n", write_mshr_stall);
+		fprintf(output, "Inst MSHR stall: %lu\n", instructions_mshr_stall);
 
 		utils_t::largestSeparator(output);
 		fprintf(output, "Total_Cycle:  %lu\n", this->get_ended_cycle());
@@ -3538,12 +3530,12 @@ void processor_t::statistics()
 		}
 
 		delete[] cache_indexes;
-	}
 
-	if (close)
-		fclose(output);
-	this->disambiguator->statistics();
-	printf("Inst_requests: %lu\n", inst_requests);
+
+		fprintf(output, "Fetch_CacheManager_Inst_requests: %lu\n", fetch_CacheManager_Inst_requests);
+
+		this->disambiguator->statistics(output);
+	}
 }
 
 void processor_t::printCache(FILE *output)

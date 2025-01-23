@@ -378,13 +378,8 @@ uint32_t cache_t::write(memory_package_t* request){
 }
 
 // statistics of a level of cache
-void cache_t::statistics() {
-	FILE *output = stdout;
-	bool close = false;
-	if(orcs_engine.output_file_name != NULL){
-		close=true;
-		output = fopen(orcs_engine.output_file_name,"a+");
-	}
+void cache_t::statistics(FILE *output) {
+	
 	if (output != NULL){
 		fprintf(output,"#========================================================================#\n");
         fprintf(output,"#L%d %s Cache\n", this->level+1, get_enum_cache_type_char ((cacheId_t) this->id));
@@ -415,7 +410,7 @@ void cache_t::statistics() {
 		fprintf(output, "%d_Cache_WriteBack:    %lu\n", this->level, this->get_cache_writeback());
 		fprintf(output, "%d_MSHR_Max_Reached:   %u\n", this->level, this->get_max_reached());
 	}
-	if(close) fclose(output);
+
 }
 
 void cache_t::reset_statistics() {

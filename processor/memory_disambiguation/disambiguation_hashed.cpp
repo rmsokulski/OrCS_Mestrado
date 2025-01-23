@@ -171,13 +171,8 @@ void disambiguation_hashed_t::solve_memory_dependences(memory_order_buffer_line_
 	}
 }
 
-void disambiguation_hashed_t::statistics() {
-	bool close = false;
-	FILE *output = stdout;
-	if(orcs_engine.output_file_name != NULL) {
-		output = fopen(orcs_engine.output_file_name,"a+");
-		close=true;
-	}
+void disambiguation_hashed_t::statistics(FILE *output) {
+	
 	if (output != NULL){
 			utils_t::largeSeparator(output);
 			fprintf(output,"#Memory Disambiguation\n");
@@ -187,7 +182,7 @@ void disambiguation_hashed_t::statistics() {
             fprintf(output,"Total_Resolve_Address_to_Address: %lu\n",this->get_stat_address_to_address());
             utils_t::largeSeparator(output);
     }
-    if(close) fclose(output);
+
 }
 
 void disambiguation_hashed_t::reset_statistics() {

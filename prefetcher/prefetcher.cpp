@@ -57,13 +57,8 @@ void prefetcher_t::prefecht(memory_order_buffer_line_t *mob_line, cache_t *cache
         }
     }*/
 }
-void prefetcher_t::statistics(){
-    bool close = false;
-    FILE *output = stdout;
-	if(orcs_engine.output_file_name != NULL){
-		output = fopen(orcs_engine.output_file_name,"a+");
-        close=true;
-    }
+void prefetcher_t::statistics(FILE *output){
+   
 	if (output != NULL){
             utils_t::largeSeparator(output);
             fprintf(output,"##############  PREFETCHER ##################\n");
@@ -73,7 +68,7 @@ void prefetcher_t::statistics(){
             fprintf(output,"MediaAtraso: %.4f\n",(float)this->get_totalCycleLate()/(float)this->get_latePrefetches());
             utils_t::largeSeparator(output);
         }
-	if(close) fclose(output);
+
 }
 
 void prefetcher_t::reset_statistics(){

@@ -266,6 +266,7 @@ int main(int argc, char **argv) {
     // *****************************************************************************************
 	ORCS_PRINTF("End of Simulation\n")
 	ORCS_PRINTF("Writing FILE\n")
+
     uint64_t FullLength = 0;
     gettimeofday(&orcs_engine.stat_timer_end, NULL);
     bool memory_leak_warning = false;
@@ -292,6 +293,11 @@ int main(int argc, char **argv) {
         output = fopen(orcs_engine.output_file_name,"a+");
         close=true;
     }
+
+    if (output == NULL) {
+        output = stdout;
+    }
+    
     if (output != NULL){
         fprintf(output,"Global_Statistics\n");
         utils_t::largeSeparator(output);
@@ -304,29 +310,24 @@ int main(int argc, char **argv) {
         fprintf(output,"KIPS: %lf\n", static_cast<double> (kilo_instructions_simulated/seconds_spent));   
         if (memory_leak_warning) fprintf(output,"Check for Memory Leak!\n");   
         utils_t::largeSeparator(output);
-    }
-    if(close) fclose(output);
-    for (uint32_t i = 0; i < NUMBER_OF_PROCESSORS; i++)
-    {
-        bool close = false;
-        if(orcs_engine.output_file_name != NULL){
-            output = fopen(orcs_engine.output_file_name,"a+");
-            close=true;
+
+
+        for (uint32_t i = 0; i < NUMBER_OF_PROCESSORS; i++)
+        {
+                utils_t::largeSeparator(output);
+                fprintf(output,"Statistics of Core %d\n",i);
+                orcs_engine.trace_reader[i].statistics(output);
+                orcs_engine.processor[i].statistics(output);
+                orcs_engine.branchPredictor[i].statistics(output);
+                orcs_engine.cacheManager->statistics(output, i);
+                utils_t::largeSeparator(output);
         }
-        if (output != NULL){
-            utils_t::largeSeparator(output);
-            fprintf(output,"Statistics of Core %d\n",i);
-            orcs_engine.trace_reader[i].statistics();
-            orcs_engine.processor[i].statistics();
-            orcs_engine.branchPredictor[i].statistics();
-            orcs_engine.cacheManager->statistics(i);
-            utils_t::largeSeparator(output);
-            if(close)fclose(output);
-        }
+        orcs_engine.memory_controller->statistics(output);
+        if (orcs_engine.processor->get_HAS_HIVE()) orcs_engine.hive_controller->statistics(output);
+        if (orcs_engine.processor->get_HAS_VIMA()) orcs_engine.vima_controller->statistics(output);
+
+        if(close) fclose(output);
     }
-    orcs_engine.memory_controller->statistics();    
-    if (orcs_engine.processor->get_HAS_HIVE()) orcs_engine.hive_controller->statistics();
-    if (orcs_engine.processor->get_HAS_VIMA()) orcs_engine.vima_controller->statistics();
 
     // *****************************************************************************************
 
@@ -339,7 +340,7 @@ int main(int argc, char **argv) {
     delete orcs_engine.cacheManager;
     ORCS_PRINTF("Deleting HIVE Controller\n")
     delete orcs_engine.hive_controller;
-    ORCS_PRINTF ("Deleting VIMA Controller\n")
+    ORCS_PRINTF("Deleting VIMA Controller\n")
     delete orcs_engine.vima_controller;
     ORCS_PRINTF("Deleting Memory Controller\n")
     delete orcs_engine.memory_controller;

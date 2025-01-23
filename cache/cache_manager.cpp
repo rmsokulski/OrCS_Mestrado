@@ -186,8 +186,8 @@ cache_t **cache_manager_t::instantiate_cache(cacheId_t cache_type, libconfig::Se
         for (uint32_t j = 0; j < CACHE_AMOUNT[i]; j++) {
             cache[i][j].allocate(NUMBER_OF_PROCESSORS, INSTRUCTION_LEVELS, DATA_LEVELS);
             cache[i][j].is_inst_cache = (cache_type == INSTRUCTION);
-            printf("Creating %s cache of level %d, I_LEVELS: %u, D_LEVELS: %u\n", cache[i][j].is_inst_cache ? "INST" : "DATA",
-                j, INSTRUCTION_LEVELS, DATA_LEVELS);
+            ORCS_PRINTF("Creating %s cache of level %d, I_LEVELS: %u, D_LEVELS: %u\n", cache[i][j].is_inst_cache ? "INST" : "DATA",
+                i, INSTRUCTION_LEVELS, DATA_LEVELS);
         }
     }
     delete[] CACHE_AMOUNT;
@@ -706,33 +706,28 @@ bool cache_manager_t::available (uint32_t processor_id, memory_operation_t op){
     return result;
 }
 
-void cache_manager_t::statistics(uint32_t core_id) {
+void cache_manager_t::statistics(FILE *output, uint32_t core_id) {
     int32_t *cache_indexes = new int32_t[POINTER_LEVELS]();
-    bool close = false;
-    FILE *output = stdout;
-	if (orcs_engine.output_file_name != NULL) {
-		output = fopen(orcs_engine.output_file_name,"a+");
-        close=true;
-    }
+
 	if (output != NULL) {
         utils_t::largestSeparator(output);
         fprintf(output,"#========================================================================#\n");
         fprintf(output,"#Cache Manager\n");
         fprintf(output,"#========================================================================#\n");
         if (this->get_sent_ram() > 0) {
-            ORCS_PRINTF ("Total Reads:                       %lu\nTotal Writes:                      %lu\n", this->get_reads(), this->get_writes())
-            ORCS_PRINTF ("Total RAM requests:                %lu\nTotal RAM request latency cycles:  %lu\n", this->get_sent_ram(), this->get_sent_ram_cycles())
-            ORCS_PRINTF ("Avg. wait for RAM requests:        %lu\n", sent_ram_cycles/sent_ram)
-            ORCS_PRINTF ("Min. wait for RAM requests:        %lu\n", min_sent_ram)
-            ORCS_PRINTF ("Max. wait for RAM requests:        %lu\n", max_sent_ram)
+            fprintf(output, "Total Reads:                       %lu\nTotal Writes:                      %lu\n", this->get_reads(), this->get_writes());
+            fprintf(output, "Total RAM requests:                %lu\nTotal RAM request latency cycles:  %lu\n", this->get_sent_ram(), this->get_sent_ram_cycles());
+            fprintf(output, "Avg. wait for RAM requests:        %lu\n", sent_ram_cycles/sent_ram);
+            fprintf(output, "Min. wait for RAM requests:        %lu\n", min_sent_ram);
+            fprintf(output, "Max. wait for RAM requests:        %lu\n", max_sent_ram);
         }
         if (this->get_sent_hive() > 0) {
-            ORCS_PRINTF ("Total HIVE requests:               %lu\nTotal HIVE request latency cycles: %lu\n", this->get_sent_hive(), this->get_sent_hive_cycles())
-            ORCS_PRINTF ("Average wait for HIVE requests:    %lu\n", sent_hive_cycles/sent_hive)
+            fprintf(output, "Total HIVE requests:               %lu\nTotal HIVE request latency cycles: %lu\n", this->get_sent_hive(), this->get_sent_hive_cycles());
+            fprintf(output, "Average wait for HIVE requests:    %lu\n", sent_hive_cycles/sent_hive);
         }
         if (this->get_sent_vima() > 0){
-            ORCS_PRINTF ("Total VIMA requests:               %lu\nTotal VIMA request latency cycles: %lu\n", this->get_sent_vima(), this->get_sent_vima_cycles())
-            ORCS_PRINTF ("Average wait for VIMA requests:    %lu\n", sent_vima_cycles/sent_vima)
+            fprintf(output, "Total VIMA requests:               %lu\nTotal VIMA request latency cycles: %lu\n", this->get_sent_vima(), this->get_sent_vima_cycles());
+            fprintf(output, "Average wait for VIMA requests:    %lu\n", sent_vima_cycles/sent_vima);
         }
     
         utils_t::largestSeparator(output);
@@ -750,17 +745,17 @@ void cache_manager_t::statistics(uint32_t core_id) {
         fprintf(output, "Already there (WRITE): %lu\n", already_searching_write);
 
     }
-	if(close) fclose(output);
+
     this->generateIndexArray(core_id, cache_indexes);
     for (uint32_t i = 0; i < INSTRUCTION_LEVELS; i++) {
-        this->instruction_cache[i][cache_indexes[i]].statistics();
+        this->instruction_cache[i][cache_indexes[i]].statistics(output);
     }
     for (uint32_t i = 0; i < DATA_LEVELS; i++) {
-        this->data_cache[i][cache_indexes[i]].statistics();
+        this->data_cache[i][cache_indexes[i]].statistics(output);
     }
     // Prefetcher
     if (PREFETCHER_ACTIVE){
-        this->prefetcher->statistics();
+        this->prefetcher->statistics(output);
     }
 
     delete[] cache_indexes;

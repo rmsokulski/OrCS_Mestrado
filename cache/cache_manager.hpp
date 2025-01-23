@@ -79,7 +79,7 @@ class cache_manager_t {
         void allocate(uint32_t NUMBER_OF_PROCESSORS);
         bool isBusy();
         void clock();//for prefetcher
-        void statistics(uint32_t core_id);
+        void statistics(FILE *output, uint32_t core_id);
         void reset_statistics(uint32_t core_id);
         void generateIndexArray(uint32_t processor_id, int32_t *cache_indexes);
         bool searchData(memory_package_t *mob_line);

@@ -19,7 +19,7 @@ class stride_prefetcher_t{
         uint32_t installStride(uint64_t pc, uint64_t address); //install new entry
         uint32_t updateStride(uint64_t pc, uint64_t address, status_stride_prefetcher_t status); //update entry
         int64_t verify(uint64_t pc,uint64_t address);//returrn address to prefetch
-        void statistics();
+        void statistics(FILE *output);
 
         INSTANTIATE_GET_SET_ADD (uint32_t, DISTANCE)
         INSTANTIATE_GET_SET_ADD (uint32_t, STRIDE_TABLE_SIZE)

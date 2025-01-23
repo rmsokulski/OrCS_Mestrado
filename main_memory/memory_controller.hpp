@@ -103,7 +103,7 @@ class memory_controller_t{
         memory_controller_t();
         ~memory_controller_t();
         void clock();
-        void statistics();
+        void statistics(FILE *output);
         void reset_statistics();
         void set_masks();
         uint64_t requestDRAM (memory_package_t* request);

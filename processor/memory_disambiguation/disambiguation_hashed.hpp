@@ -16,7 +16,7 @@ public:
     void allocate();
     void make_memory_dependences(memory_order_buffer_line_t *mob_line);
     void solve_memory_dependences(memory_order_buffer_line_t *mob_line);
-    void statistics();
+    void statistics(FILE *output);
     void reset_statistics();
 
     // ============================================

@@ -42,7 +42,7 @@ class branch_predictor_t{
         ~branch_predictor_t();
         void allocate (uint32_t processor_id);
         uint32_t solveBranch(opcode_package_t instruction, opcode_package_t nextOpcode);
-        void statistics();
+        void statistics(FILE *output);
         void reset_statistics();
 
         INSTANTIATE_GET_SET_ADD (uint32_t, btbHits)
