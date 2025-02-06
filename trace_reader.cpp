@@ -359,15 +359,6 @@ bool trace_reader_t::trace_string_to_opcode(char *input_string, opcode_package_t
         printf("Leu scatter\n");
     }
 
-    /*
-    opcode->is_read = (sub_string[0] == '1');
-
-    sub_string = strtok_r(NULL, " ", &tmp_ptr);
-    opcode->is_read2 = (sub_string[0] == '1');
-
-    sub_string = strtok_r(NULL, " ", &tmp_ptr);
-    opcode->is_write = (sub_string[0] == '1');
-    */
 
     sub_string = strtok_r(NULL, " ", &tmp_ptr);
     opcode->branch_type = branch_t(strtoull(sub_string, NULL, 10));
