@@ -1118,7 +1118,7 @@ void processor_t::fetch()
 
 // Buffers status
 #if FETCH_DEBUG
-		printf("Ciclo: %lu - F: %u/%d  D: %d/%u ROB: %u/%u MOB R: %u/%u MOB W: %u/%u URS: %lu/%u\n",
+		ORCS_PRINTF("Ciclo: %lu - F: %u/%d  D: %d/%u ROB: %u/%u MOB R: %u/%u MOB W: %u/%u URS: %lu/%u\n",
 			   orcs_engine.get_global_cycle(),
 			   fetchBuffer.size, FETCH_BUFFER,
 			   decodeBuffer.size, DECODE_BUFFER,
@@ -2694,11 +2694,11 @@ void processor_t::execute()
 
 				ERROR_ASSERT_PRINTF(rob_line->mob_base != NULL, "Read with a NULL pointer to MOB\n%s\n", rob_line->content_to_string().c_str())
 
-				this->memory_read_executed++;
-
+				
 				for (uint32_t a = 0; a < rob_line->uop.num_mem_operations; ++a){
 					uint32_t pos = (rob_line->pos_mob + a) % rob_line->mob_limit;
 					rob_line->mob_base[pos].uop_executed = true;
+					this->memory_read_executed++;
 				}
 
 				rob_line->uop.updatePackageWait(EXECUTE_LATENCY);
@@ -2712,11 +2712,13 @@ void processor_t::execute()
 			case INSTRUCTION_OPERATION_MEM_STORE:
 			{
 				ERROR_ASSERT_PRINTF(rob_line->mob_base != NULL, "Write with a NULL pointer to MOB\n%s\n", rob_line->content_to_string().c_str())
-				this->memory_write_executed++;
+				
 
 				for (uint32_t a = 0; a < rob_line->uop.num_mem_operations; ++a){
 					uint32_t pos = (rob_line->pos_mob + a) % rob_line->mob_limit;
 					rob_line->mob_base[pos].uop_executed = true;
+					this->memory_write_executed++;
+					
 				}
 
 				rob_line->uop.updatePackageWait(EXECUTE_LATENCY);
@@ -2792,8 +2794,9 @@ void processor_t::execute()
 	// Executar o MOB Write, com a escrita mais antiga.
 	// depois liberar e tratar as escrita prontas;
 	// ==================================
+	
 	for (size_t i = 0; i < PARALLEL_STORES; i++)
-	{
+	{	
 		if (this->memory_write_executed != 0)
 		{
 			this->mob_write();
@@ -3098,7 +3101,6 @@ uint32_t processor_t::mob_write()
 
 	if (this->oldest_write_to_send != NULL && !this->oldest_write_to_send->sent)
 	{
-
 		if (!orcs_engine.cacheManager->available(this->processor_id, MEMORY_OPERATION_WRITE))
 		{
 			write_mshr_stall++;
@@ -3167,6 +3169,7 @@ uint32_t processor_t::mob_write()
 		this->oldest_write_to_send = NULL;
 		// =============================================================
 	} //end if request null
+	
 	return OK;
 }
 // ============================================================================
@@ -3179,7 +3182,7 @@ void processor_t::commit()
 		ORCS_PRINTF("========== Commit Stage ==========\n")
 		ORCS_PRINTF("Cycle %lu\n", orcs_engine.get_global_cycle())
 		if (this->reorderBuffer.robUsed > 0)
-			std::cout << "ROB Head " << this->reorderBuffer.reorderBuffer[reorderBuffer.robStart].content_to_string() << std::endl;
+			ORCS_PRINTF("ROB Head %s\n", this->reorderBuffer.reorderBuffer[reorderBuffer.robStart].content_to_string().c_str())
 		ORCS_PRINTF("==================================\n")
 	}
 #endif

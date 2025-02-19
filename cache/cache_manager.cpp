@@ -429,7 +429,7 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
 
 void cache_manager_t::install (memory_package_t* request){
     #if PROCESSOR_DEBUG 
-        printf("%lu Cache Manager installCache(): %lu in processor %u\n", orcs_engine.get_global_cycle(), request->memory_address, request->processor_id);
+        ORCS_PRINTF("%lu Cache Manager installCache(): %lu in processor %u\n", orcs_engine.get_global_cycle(), request->memory_address, request->processor_id);
     #endif
     int32_t *cache_indexes = new int32_t[POINTER_LEVELS]();
     this->generateIndexArray(request->processor_id, cache_indexes);
