@@ -29,14 +29,6 @@ class trace_reader_t {
         uint64_t processor_id;
         uint64_t address_translation;
 
-        // ====================================================================
-        /// Traces related
-        // ====================================================================
-        int32_t max_INT_register_value;
-        int32_t min_INT_register_value;
-        int32_t max_FP_register_value;
-        int32_t min_FP_register_value;
-
 
         // ====================================================================
         /// Methods
