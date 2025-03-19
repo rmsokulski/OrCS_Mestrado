@@ -220,6 +220,41 @@ processor_t::processor_t()
 	// ==========ROB========
 	this->reorderBuffer.reorderBuffer = NULL;
 
+	// RVV into VIMA
+	/*
+		INSTRUCTION_OPERATION_VIMA_FP_ALU,   //27
+    	INSTRUCTION_OPERATION_VIMA_FP_MUL,   //28
+    	INSTRUCTION_OPERATION_VIMA_FP_DIV,    //29
+    	INSTRUCTION_OPERATION_VIMA_INT_MLA,   //30
+    	INSTRUCTION_OPERATION_VIMA_FP_MLA,   //31
+    	INSTRUCTION_OPERATION_VIMA_GATHER, //32
+    	INSTRUCTION_OPERATION_VIMA_SCATTER, //33
+	*/
+	RVV_into_VIMA_opcode_operation["vle64.v"]    = INSTRUCTION_OPERATION_VIMA_GATHER;
+	RVV_into_VIMA_opcode_operation["vse64.v"]    = INSTRUCTION_OPERATION_VIMA_SCATTER;
+	RVV_into_VIMA_opcode_operation["vfsub.vv"]   = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vsetvli"]    = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vfmadd.vv"]  = INSTRUCTION_OPERATION_VIMA_FP_MUL;
+	RVV_into_VIMA_opcode_operation["vse32.v"]    = INSTRUCTION_OPERATION_VIMA_SCATTER;
+	RVV_into_VIMA_opcode_operation["vmv.v.x"]    = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vadd.vv"]    = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vmadd.vv"]   = INSTRUCTION_OPERATION_VIMA_FP_MUL;
+	RVV_into_VIMA_opcode_operation["vmv1r.v"]    = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vadd.vi"]    = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vle32.v"]    = INSTRUCTION_OPERATION_VIMA_GATHER;
+	RVV_into_VIMA_opcode_operation["vmul.vv"]    = INSTRUCTION_OPERATION_VIMA_FP_MUL;
+	RVV_into_VIMA_opcode_operation["vnsrl.wx"]   = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vid.v"]      = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vsll.vi"]    = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vfmv.v.f"]   = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vmv.v.i"]    = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vse8.v"]     = INSTRUCTION_OPERATION_VIMA_SCATTER;
+	RVV_into_VIMA_opcode_operation["vsetivli"]   = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vluxei64.v"] = INSTRUCTION_OPERATION_VIMA_GATHER;
+	RVV_into_VIMA_opcode_operation["vmv.x.s"]    = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vredsum.vs"] = INSTRUCTION_OPERATION_VIMA_INT_MLA;
+	RVV_into_VIMA_opcode_operation["vmv.s.x"]    = INSTRUCTION_OPERATION_VIMA_FP_ALU;
+	RVV_into_VIMA_opcode_operation["vmacc.vv"]   = INSTRUCTION_OPERATION_VIMA_FP_MUL;
 }
 
 processor_t::~processor_t()
@@ -1064,6 +1099,12 @@ void processor_t::fetch()
 				this->hasBranch = true;
 			}
 
+			// RVV into VIMA
+			auto iterator_rvv = RVV_into_VIMA_opcode_operation.find(std::string(operation.opcode_assembly));
+			if (iterator_rvv != RVV_into_VIMA_opcode_operation.end()) {
+				operation.opcode_operation = iterator_rvv->second;
+			}
+
 			//============================
 			//Insert into fetch buffer
 			//============================
@@ -1072,6 +1113,8 @@ void processor_t::fetch()
 			{
 				break;
 			}
+
+
 
 #if PROCESSOR_DEBUG
 			assert(operation.opcode_operation != -1);

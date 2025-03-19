@@ -414,6 +414,9 @@ class processor_t {
         uint64_t* max_wait_operations;
         uint64_t wait_time;
 
+		// RVV into VIMA
+		std::unordered_map<std::string, instruction_operation_t> RVV_into_VIMA_opcode_operation;
+
 
 		INSTANTIATE_GET_SET(uint64_t,processor_id)
 		// ====================================================================
