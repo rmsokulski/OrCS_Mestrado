@@ -2028,7 +2028,9 @@ void processor_t::rename()
 					#endif
 				}
 
+
 				pos_mob = this->search_position_mob_vima(&MOB_LIMIT);
+
 				if (pos_mob == POSITION_FAIL)
 				{
 					this->add_stall_full_MOB_Read();
