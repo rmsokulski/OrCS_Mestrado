@@ -491,6 +491,13 @@ void processor_t::allocate()
 		set_SIMULATED_VECTOR_LOAD_SIZE(cfg_processor["SIMULATED_VECTOR_LOAD_SIZE"]);
 	else
 		set_SIMULATED_VECTOR_LOAD_SIZE(0);
+
+
+	if (cfg_processor.exists("IN_ORDER"))
+      { set_IN_ORDER(cfg_processor["IN_ORDER"] ? true : false); }
+    else
+	  { set_IN_ORDER(false); }
+
 	//======================================================================
 	// Initializating variables
 	//======================================================================
@@ -1005,7 +1012,9 @@ void processor_t::fetch()
 			//=============================
 			//Stall full fetch buffer
 			//=============================
-			if (this->fetchBuffer.size == FETCH_BUFFER)
+			if ((this->fetchBuffer.size == FETCH_BUFFER) ||
+    			(IN_ORDER && (this->fetchBuffer.size > 0)))
+
 			{
 				//printf("STALL\n");
 				this->add_stall_full_FetchBuffer();
@@ -1188,6 +1197,13 @@ void processor_t::decode()
 		{
 			break;
 		}
+
+		if (IN_ORDER && (this->decodeBuffer.get_size() > 0))
+		{
+		 this->add_stall_full_DecodeBuffer();
+		 break;
+		}
+
 
 		opcode_package_t *instr = this->fetchBuffer.front();
 		instruction_set_t *instr_set = orcs_engine.instruction_set;
@@ -1734,7 +1750,7 @@ void processor_t::decode()
 					{
 						new_uop.read_regs[i] = POSITION_FAIL;
 					}
-					/// Insert UOPS_LINK_REGISTER into WRegs
+					/// Insert UOPS_LINK_REGISTER into RRegs
 					new_uop.read_regs[0] = UOPS_LINK_REGISTER;
 					inserted_UOPS_LINK_REGISTER = true;
 
@@ -1866,7 +1882,10 @@ void processor_t::rename()
 			break;
 		}
 
-		if (reorderBuffer.robUsed >= ROB_SIZE) {
+		if ((reorderBuffer.robUsed >= ROB_SIZE) ||
+		    (IN_ORDER && (reorderBuffer.robUsed > 0)))
+		{
+
 			/*if(!travado){
 				travado = true;
 				printf("********************************************************\n");
@@ -2360,7 +2379,8 @@ void processor_t::dispatch()
 		}
 #endif
 
-		if (total_dispatched >= DISPATCH_WIDTH)
+		if ((total_dispatched >= DISPATCH_WIDTH) ||
+		    (IN_ORDER && (total_dispatched > 0)))
 		{
 			break;
 		}
@@ -2609,10 +2629,12 @@ void processor_t::execute()
 	{
 		reorder_buffer_line_t *rob_line = this->unified_functional_units[i];
 
-		if (uop_total_executed == EXECUTE_WIDTH)
+		if ((uop_total_executed == EXECUTE_WIDTH) ||
+		    (IN_ORDER && (uop_total_executed > 0)))
 		{
 			break;
 		}
+
 		if (rob_line == NULL)
 		{
 			break;
@@ -3213,7 +3235,8 @@ void processor_t::commit()
 		return;
 	}
 
-	for (uint32_t i = 0; i < COMMIT_WIDTH; i++)
+	uint32_t limit = (IN_ORDER) ? 1 : COMMIT_WIDTH;
+	for(uint32_t i = 0; i < limit; i++)
 	{
 		pos_buffer = rob->robStart;
 		reorder_buffer_line_t *rob_line = &rob->reorderBuffer[pos_buffer];

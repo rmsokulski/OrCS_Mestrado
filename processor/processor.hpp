@@ -419,6 +419,8 @@ class processor_t {
 		// Default is 0
 		uint32_t SIMULATED_VECTOR_LOAD_SIZE;
 
+		bool IN_ORDER;
+
 
 		INSTANTIATE_GET_SET(uint64_t,processor_id)
 		// ====================================================================
@@ -576,5 +578,6 @@ class processor_t {
 		
 		// ====================================================================
 		INSTANTIATE_GET_SET_ADD (uint32_t, SIMULATED_VECTOR_LOAD_SIZE)
+		INSTANTIATE_GET_SET (bool, IN_ORDER)
 
 };
