@@ -1553,6 +1553,10 @@ void processor_t::decode()
 			instr_op != INSTRUCTION_OPERATION_MEM_LOAD &&
 			instr_op != INSTRUCTION_OPERATION_MEM_STORE)
 		{*/
+
+			uint32_t last_generated_uop = uops.size() - 1;
+			uint32_t current_uop_counter = 0;
+
 			// Iterate over uops from instruction
 			for (uint32_t uop_idx : uops)
 			{
@@ -1613,8 +1617,24 @@ void processor_t::decode()
 										"Could not insert register_%d, all MAX_REGISTERS(%d) used.\n",
 										UOPS_LINK_REGISTER, MAX_REGISTERS);
 				}
+				// Dependency with previous uop from instruction
+  				else if (current_uop_counter > 0) { 
+  				  // Find the first empty register
+  				  for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+  				  {
+  				    if (new_uop.read_regs[i] == POSITION_FAIL)
+  				    {
+  				           // Use it to link
+  				      new_uop.read_regs[i] = UOPS_LINK_REGISTER;
+  				      break;
+  				    }
+  				  }
 
-				if ((instr->num_writes > 0) || (instr_op == INSTRUCTION_OPERATION_BRANCH))
+  				}
+
+				if ((instr->num_writes > 0) ||
+				    (instr_op == INSTRUCTION_OPERATION_BRANCH || 
+				    (current_uop_counter < last_generated_uop)))
 				{
 					// There will be another uop after this list.
 					// Se adding a dependecy for it in register UOPS_LINK_REGISTER
@@ -1646,6 +1666,7 @@ void processor_t::decode()
 				#endif
 				ERROR_ASSERT_PRINTF(statusInsert != POSITION_FAIL,
 									"Erro, Tentando decodificar mais uops que o maximo permitido");
+				current_uop_counter++;
 			}
 
 		/*}*/
