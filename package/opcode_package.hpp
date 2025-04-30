@@ -40,7 +40,7 @@ class opcode_package_t : public memory_request_client_t {
 
         bool is_vima;
 
-   
+        bool is_vector_insn;
 
         // ====================================================================
         /// Status Control

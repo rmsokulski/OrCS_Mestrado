@@ -484,6 +484,13 @@ void processor_t::allocate()
 
 	set_PREFETCHER_ACTIVE(cfg_prefetcher["PREFETCHER_ACTIVE"]);
 
+
+	// libconfig::Setting &cfg_root = orcs_engine.configuration->getConfig();
+	// libconfig::Setting &cfg_processor = cfg_root[“PROCESSOR”][0];
+	if (cfg_processor.exists("SIMULATED_VECTOR_LOAD_SIZE"))
+		set_SIMULATED_VECTOR_LOAD_SIZE(cfg_processor["SIMULATED_VECTOR_LOAD_SIZE"]);
+	else
+		set_SIMULATED_VECTOR_LOAD_SIZE(0);
 	//======================================================================
 	// Initializating variables
 	//======================================================================
@@ -1035,6 +1042,12 @@ void processor_t::fetch()
 							operation.opcode_number,
 							operation.content_to_string2().c_str())
 #endif
+
+			//========================
+			//Mark vector insn
+			//========================
+			operation.is_vector_insn = is_vector_insn(&operation);
+
 
 			//============================
 			///Solve Branch
@@ -2055,6 +2068,7 @@ void processor_t::rename()
 			for (uint32_t r = 0; r < rob_line->uop.num_mem_operations; ++r)
 			{
 				uint32_t pos = (pos_mob + r) % MOB_LIMIT;
+  				rob_line->mob_base[pos].is_first_of_vector_load = ((r == 0) && rob_line->uop.is_vector_insn);
 				rob_line->mob_base[pos].opcode_address = rob_line->uop.opcode_address;
 				rob_line->mob_base[pos].memory_address = rob_line->uop.memory_address[r];
 				rob_line->mob_base[pos].memory_size = rob_line->uop.memory_size[r];
@@ -3595,6 +3609,14 @@ void processor_t::printConfiguration()
 		fprintf(output, "PARALLEL_LIM_ACTIVE ->%u\n", PARALLEL_LIM_ACTIVE);
 		fprintf(output, "MAX_PARALLEL_REQUESTS_CORE ->%u\n", MAX_PARALLEL_REQUESTS_CORE);
 	}
+}
+
+// ============================================================================
+
+bool processor_t::is_vector_insn(opcode_package_t *insn) {
+	// Deve verificar se o opcode_assembly começa com v
+	if (insn->opcode_assembly[0] == 'v') return true;
+	return false;
 }
 
 // ============================================================================

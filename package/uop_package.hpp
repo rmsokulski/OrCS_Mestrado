@@ -36,6 +36,8 @@ class uop_package_t{
     uint8_t uop_id;
     bool is_masked;
 
+    bool is_vector_insn;
+
     void opcode_to_uop(uint64_t uop_number, 
             instruction_operation_t uop_operation, 
             uint32_t latency, uint32_t throughput, functional_unit_t *fu_id,

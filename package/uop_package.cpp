@@ -89,6 +89,8 @@ void uop_package_t::opcode_to_uop(
     //this->memory_address = memory_address;
     //this->memory_size = memory_size;
     this->num_mem_operations = 0;
+
+    this->is_vector_insn = opcode.is_vector_insn;
                     
 }
 

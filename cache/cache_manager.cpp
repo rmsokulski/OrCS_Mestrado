@@ -535,6 +535,17 @@ void cache_manager_t::process (memory_package_t* request, int32_t* cache_indexes
                 #if MEMORY_DEBUG 
                     ORCS_PRINTF (" sent to RAM.\n")
                 #endif
+                
+                // Check if its the first load request from RVV
+                if (((memory_order_buffer_line_t *) request->clients[0])->is_first_of_vector_load) {
+                    
+                    // Change the request memory_size
+                    request->memory_size = (request->memory_size < orcs_engine.processor->get_SIMULATED_VECTOR_LOAD_SIZE()) ?
+                                           orcs_engine.processor->get_SIMULATED_VECTOR_LOAD_SIZE() : request->memory_size;
+
+                }
+
+
                 orcs_engine.memory_controller->add_requests_llc();
                 orcs_engine.memory_controller->requestDRAM (request);
             }
