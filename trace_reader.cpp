@@ -334,7 +334,8 @@ bool trace_reader_t::trace_string_to_opcode(char *input_string, opcode_package_t
     // Número de leituras
     sub_string = strtok_r(NULL, " ", &tmp_ptr);
     opcode->num_reads = strtoul(sub_string, NULL, 10);
-    assert(opcode->num_reads <= MAX_MEM_OPERATIONS);
+    assert((opcode->num_reads <= MAX_MEM_OPERATIONS) ||
+           (opcode->num_reads == UINT32_MAX));
 
     // if(opcode->num_reads > 2) {
     //     printf("Leu gather\n");
@@ -343,7 +344,8 @@ bool trace_reader_t::trace_string_to_opcode(char *input_string, opcode_package_t
     // Número de escritas
     sub_string = strtok_r(NULL, " ", &tmp_ptr);
     opcode->num_writes = strtoul(sub_string, NULL, 10);
-    assert(opcode->num_writes <= MAX_MEM_OPERATIONS);
+    assert((opcode->num_writes <= MAX_MEM_OPERATIONS) ||
+           (opcode->num_writes == UINT32_MAX));
 
     // if(opcode->num_writes > 1) {
     //     printf("Leu scatter\n");
@@ -794,14 +796,17 @@ bool trace_reader_t::trace_fetch(opcode_package_t *m) {
     /// If it is LOAD/STORE -> Fetch new MEMORY inside the memory file
     // =========================================================================
     bool mem_is_read;
-    for (uint32_t r=0; r < m->num_reads; ++r) {
+    uint32_t num_reads = (m->num_reads != UINT32_MAX) ? m->num_reads
+									                  : trace_next_num_accesses();
+    for (uint32_t r=0; r < num_reads; ++r) {
         trace_next_memory(&m->reads_addr[r], &m->reads_size[r], &mem_is_read);
         m->reads_addr[r] |= this->address_translation;
         //ORCS_PRINTF ("read1: %lu | ", m->read_address)
         ERROR_ASSERT_PRINTF(mem_is_read == true, "Expecting a read from memory trace\n");
     }
-
-    for (uint32_t w=0; w < m->num_writes; ++w) {
+    uint32_t num_writes = (m->num_writes != UINT32_MAX) ? m->num_writes 
+									                    : trace_next_num_accesses();
+    for (uint32_t w=0; w < num_writes; ++w) {
         trace_next_memory(&m->writes_addr[w], &m->writes_size[w], &mem_is_read);
         m->writes_addr[w] |= this->address_translation;
         //ORCS_PRINTF ("write: %lu | ", m->write_address)
@@ -813,6 +818,39 @@ bool trace_reader_t::trace_fetch(opcode_package_t *m) {
 
 	this->fetch_instructions++;
     return OK;
+}
+// =====================================================================
+uint32_t trace_reader_t::trace_next_num_accesses() {
+    static char file_line[TRACE_LINE_SIZE];
+    file_line[0] = '\0';
+
+
+    while (true) {
+        /// Obtain the next trace line
+        if (gzeof(this->gzMemoryTraceFile)) {
+            return FAIL;
+        }
+        char *buffer = gzgets(this->gzMemoryTraceFile, file_line, TRACE_LINE_SIZE);
+        if (buffer == NULL) {
+            return FAIL;
+        }
+
+        //ORCS_PRINTF ("processor %lu | %s", processor_id, file_line)
+
+        /// Analyze the trace line
+        if (file_line[0] == '\0' || file_line[0] == '#') {
+            DEBUG_PRINTF("Memory trace line (empty/comment): %s\n", file_line);
+            continue;
+        }
+        else {
+            ERROR_ASSERT_PRINTF(file_line[0] != '$', "Error searching for num accesses in line %s\n", file_line);
+
+            uint32_t num_accesses = (uint32_t)strtoul(file_line + 1, NULL, 10);
+            assert(num_accesses <= MAX_MEM_OPERATIONS);
+           
+            return num_accesses;
+        }
+    }
 }
 
 // =====================================================================
