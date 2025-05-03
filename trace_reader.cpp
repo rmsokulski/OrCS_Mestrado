@@ -798,6 +798,7 @@ bool trace_reader_t::trace_fetch(opcode_package_t *m) {
     bool mem_is_read;
     uint32_t num_reads = (m->num_reads != UINT32_MAX) ? m->num_reads
 									                  : trace_next_num_accesses();
+    printf("Num reads: %u\n", num_reads);
     for (uint32_t r=0; r < num_reads; ++r) {
         trace_next_memory(&m->reads_addr[r], &m->reads_size[r], &mem_is_read);
         m->reads_addr[r] |= this->address_translation;
@@ -821,6 +822,7 @@ bool trace_reader_t::trace_fetch(opcode_package_t *m) {
 }
 // =====================================================================
 uint32_t trace_reader_t::trace_next_num_accesses() {
+    printf("Em trace_next_num_accesses\n");
     static char file_line[TRACE_LINE_SIZE];
     file_line[0] = '\0';
 
