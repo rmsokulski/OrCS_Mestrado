@@ -284,15 +284,26 @@ line_t* cache_t::installLine(memory_package_t* request, uint32_t latency, uint64
 	// printf("installLine %lu in processor %u\n", request->memory_address, request->processor_id);
 	line = POSITION_FAIL;
     uint64_t tag;
+    
+	// -----------------------------------------------------------------------------------------
+    // Obtém o índice onde será instalada e a tag, com base no endereço da requisição
+    // -----------------------------------------------------------------------------------------
     this->tagIdxSetCalculation(request->memory_address, &idx, &tag);
+
+	// -----------------------------------------------------------------------------------------
+    // Procura uma entra vazia no conjunto
+    // -----------------------------------------------------------------------------------------
 	for (size_t i = 0; i < this->sets[idx].n_lines; i++) {
 		if (this->sets[idx].lines[i].valid == 0) {
 			line = i;
             break;
 		}
 	}
+
+	// -----------------------------------------------------------------------------------------
+    // Se não encontrar, obtém uma pelo LRU
+    // -----------------------------------------------------------------------------------------
 	if ((int)line == POSITION_FAIL) {
-		//printf("level: %u idx: %u\n", this->level, idx);
 		line = this->searchLru(&this->sets[idx]);
 		this->add_change_line();
 		if (this->sets[idx].lines[line].dirty == 1) {
@@ -301,6 +312,9 @@ line_t* cache_t::installLine(memory_package_t* request, uint32_t latency, uint64
 		}
 	}
 
+	// -----------------------------------------------------------------------------------------
+    // Insere o novo dado
+    // -----------------------------------------------------------------------------------------
 	this->sets[idx].lines[line].tag = tag;
 	this->sets[idx].lines[line].lru = orcs_engine.get_global_cycle() + latency;
 	this->sets[idx].lines[line].valid = 1;

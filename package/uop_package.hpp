@@ -63,6 +63,8 @@ class uop_package_t{
 };
 
 inline void uop_package_t::add_memory_operation(uint64_t memory_address, uint32_t memory_size) {
+    //printf("%s\n", this->opcode_assembly);
+    //printf("add_memory_operation: num_mem_operations -> %u\n", num_mem_operations);
     assert(num_mem_operations < MAX_MEM_OPERATIONS);
     this->memory_address[num_mem_operations] = memory_address;
     this->memory_size[num_mem_operations] = memory_size;

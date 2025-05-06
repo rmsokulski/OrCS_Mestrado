@@ -494,9 +494,13 @@ void processor_t::allocate()
 
 
 	if (cfg_processor.exists("IN_ORDER"))
-      { set_IN_ORDER(cfg_processor["IN_ORDER"] ? true : false); }
+      { 	
+		int32_t in_order = cfg_processor["IN_ORDER"];
+	    set_IN_ORDER(in_order ? true : false);
+	  }
     else
 	  { set_IN_ORDER(false); }
+
 
 	//======================================================================
 	// Initializating variables
@@ -1195,13 +1199,15 @@ void processor_t::decode()
 	{
 		if (this->fetchBuffer.is_empty())
 		{
+			DEBUG_PRINTF(" * Fetch buffer is empty\n");
 			break;
 		}
 
 		if (IN_ORDER && (this->decodeBuffer.get_size() > 0))
 		{
-		 this->add_stall_full_DecodeBuffer();
-		 break;
+			DEBUG_PRINTF(" * Decode buffer full\n");
+			this->add_stall_full_DecodeBuffer();
+			break;
 		}
 
 
@@ -1215,6 +1221,7 @@ void processor_t::decode()
 		// First instruction must be ready
 		if (instr->status != PACKAGE_STATE_READY || instr->readyAt > orcs_engine.get_global_cycle())
 		{
+			DEBUG_PRINTF(" * Not ready\n");
 			break;
 		}
 
@@ -1257,6 +1264,7 @@ void processor_t::decode()
 		// Make sure there's enough space in decodeBuffer
 		if (this->decodeBuffer.get_capacity() - this->decodeBuffer.get_size() < num_uops)
 		{
+			DEBUG_PRINTF(" * Not enough space inside the decodeBuffer, %u required\n", num_uops);
 			this->add_stall_full_DecodeBuffer();
 			break;
 		}
@@ -1899,7 +1907,7 @@ void processor_t::rename()
 			this->decodeBuffer.front()->status != PACKAGE_STATE_WAIT ||
 			this->decodeBuffer.front()->readyAt > orcs_engine.get_global_cycle())
 		{
-			//printf("Decode front not ready STATUS %s readyAt %lu\n", get_enum_package_state_char(this->decodeBuffer.front()->status), this->decodeBuffer.front()->readyAt);
+			DEBUG_PRINTF("Decode front not ready STATUS %s readyAt %lu\n", get_enum_package_state_char(this->decodeBuffer.front()->status), this->decodeBuffer.front()->readyAt);
 			break;
 		}
 
@@ -1913,6 +1921,7 @@ void processor_t::rename()
 				printf("%lu (uop %lu:%u) ROB Full!!!\n", orcs_engine.get_global_cycle(), this->decodeBuffer.front()->opcode_address, this->decodeBuffer.front()->uop_id);
 				printf("********************************************************\n");
 			}*/
+			DEBUG_PRINTF(" * %lu (uop %lu:%u) ROB Full!!!\n", orcs_engine.get_global_cycle(), this->decodeBuffer.front()->opcode_address, this->decodeBuffer.front()->uop_id)
 			this->add_stall_full_ROB();
 			break;
 		}
@@ -1920,6 +1929,7 @@ void processor_t::rename()
 
 		// Verifica se há espaço na URS
 		if (this->unified_reservation_station.size() == this->unified_reservation_station.capacity()) {
+			DEBUG_PRINTF(" * Not enough space in the URS\n")
 			break;
 		}
 
@@ -1933,6 +1943,7 @@ void processor_t::rename()
 
 			if (this->memory_order_buffer_read_used >= MOB_READ || reorderBuffer.robUsed >= ROB_SIZE)
 			{
+				DEBUG_PRINTF(" * READ MOB || ROB full\n")
 				break;
 			}
 
@@ -1942,6 +1953,7 @@ void processor_t::rename()
 
 			if (pos_mob == POSITION_FAIL)
 			{
+				DEBUG_PRINTF(" * Not enough positions inside read mob\n")
 				this->add_stall_full_MOB_Read();
 				break;
 			}
@@ -1963,6 +1975,7 @@ void processor_t::rename()
 			pos_mob = this->search_n_positions_mob_write(this->decodeBuffer.front()->num_mem_operations, &MOB_LIMIT);
 			if (pos_mob == POSITION_FAIL)
 			{
+				DEBUG_PRINTF(" * Not enough positions inside write mob\n")
 				this->add_stall_full_MOB_Write();
 				break;
 			}
@@ -2445,7 +2458,7 @@ void processor_t::dispatch()
 				functional_unit_t *fu = uop->functional_unit;
 			if (fu->dispatch_cnt < fu->size)
 			{
-				for (uint8_t k = 0; k < fu->size; ++k)
+				for (uint32_t k = 0; k < fu->size; ++k)
 				{
 					if (fu->slot[k] <= orcs_engine.get_global_cycle())
 					{
@@ -2496,7 +2509,7 @@ void processor_t::dispatch()
 void processor_t::clean_mob_hive()
 {
 	uint32_t pos = this->memory_order_buffer_hive_start;
-	for (uint8_t i = 0; i < this->memory_order_buffer_hive_used; i++)
+	for (uint32_t i = 0; i < this->memory_order_buffer_hive_used; i++)
 	{
 		if (this->memory_order_buffer_hive[pos].status == PACKAGE_STATE_READY &&
 			this->memory_order_buffer_hive[pos].readyAt <= orcs_engine.get_global_cycle() &&
@@ -2524,7 +2537,7 @@ void processor_t::clean_mob_hive()
 void processor_t::clean_mob_vima()
 {
 	uint32_t pos = this->memory_order_buffer_vima_start;
-	for (uint8_t i = 0; i < this->memory_order_buffer_vima_used; i++)
+	for (uint32_t i = 0; i < this->memory_order_buffer_vima_used; i++)
 	{
 		if (this->memory_order_buffer_vima[pos].status == PACKAGE_STATE_READY &&
 			this->memory_order_buffer_vima[pos].readyAt <= orcs_engine.get_global_cycle() &&
@@ -2560,7 +2573,7 @@ void processor_t::clean_mob_read()
 	// remover do MOB e atualizar os registradores,
 	// ==================================
 	uint32_t pos = this->memory_order_buffer_read_start;
-	for (uint8_t i = 0; i < this->memory_order_buffer_read_used; i++)
+	for (uint32_t i = 0; i < this->memory_order_buffer_read_used; i++)
 	{
 		if (this->memory_order_buffer_read[pos].status == PACKAGE_STATE_READY &&
 			this->memory_order_buffer_read[pos].readyAt <= orcs_engine.get_global_cycle() &&
@@ -2648,7 +2661,10 @@ void processor_t::execute()
 
 	for (uint32_t i = 0; i < this->unified_functional_units.size(); i++)
 	{
+
 		reorder_buffer_line_t *rob_line = this->unified_functional_units[i];
+
+		DEBUG_PRINTF("Execute: UF %u/%lu\n", i, this->unified_functional_units.size())
 
 		if ((uop_total_executed == EXECUTE_WIDTH) ||
 		    (IN_ORDER && (uop_total_executed > 0)))
@@ -2831,6 +2847,7 @@ void processor_t::execute()
 	// =========================================================================
 	for (size_t i = 0; i < PARALLEL_LOADS; i++)
 	{
+		DEBUG_PRINTF("Execute: Executing parallel loads %lu/%u\n", i, PARALLEL_LOADS)
 		if (this->memory_read_executed != 0)
 		{
 			this->mob_read();
@@ -2854,6 +2871,7 @@ void processor_t::execute()
 	
 	for (size_t i = 0; i < PARALLEL_STORES; i++)
 	{	
+		DEBUG_PRINTF("Execute: Executing parallel stores %lu/%u\n", i, PARALLEL_LOADS)
 		if (this->memory_write_executed != 0)
 		{
 			this->mob_write();

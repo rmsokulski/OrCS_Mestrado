@@ -251,42 +251,60 @@ void cache_manager_t::allocate(uint32_t NUMBER_OF_PROCESSORS) {
 }
 
 // Dependending on processor_id, returns its correspondent data caches
+// If there are more instruction than data caches, include all data caches and
+// complete with the instruction caches
 void cache_manager_t::generateIndexArray(uint32_t processor_id, int32_t *cache_indexes) {
-    for (uint32_t i = 0; i < POINTER_LEVELS; i++) {
+    uint32_t i;
+
+    for (i = 0; i < DATA_LEVELS; i++) {
         cache_indexes[i] = (int32_t) processor_id & (DCACHE_AMOUNT[i] - 1);
+    }
+
+    for (; i < POINTER_LEVELS; i++) {
+        cache_indexes[i] = (int32_t) processor_id & (ICACHE_AMOUNT[i] - 1);
     }
 }
 
 // Install an address in every cache using pointers
 void cache_manager_t::installCacheLines(memory_package_t* request, int32_t *cache_indexes, uint32_t latency_request, cacheId_t cache_type) {
-    //printf("installCacheLines %lu in processor %u\n", request->memory_address, request->processor_id);
     uint32_t i, j;
     uint64_t llc_idx, llc_line;
     uint64_t *CACHE_TAGS = new uint64_t[POINTER_LEVELS]();
     line_t ***line = new line_t**[NUMBER_OF_PROCESSORS]();
+    if (request->memory_size > 64) {
+        printf("Vou instalar um dado maior que uma linha de cache em apenas uma linha :p\n");
+    }
+    // -----------------------------------------------------------------------------------------
+    // Obtém ponteiros para a linha de cache considerando cada processador
+    // -----------------------------------------------------------------------------------------
     for (i = 0; i < NUMBER_OF_PROCESSORS; i++) {
         line[i] = new line_t*[POINTER_LEVELS]();
         for (j = 0; j < POINTER_LEVELS; j++) {
             line[i][j] = NULL;
         }
     }
+
     if (cache_type == INSTRUCTION) {
+        // -----------------------------------------------------------------------------------------
+        // Instala a linha contendo a instrução em todos os níveis da cache de instruções
+        // -----------------------------------------------------------------------------------------
         for (i = 0; i < INSTRUCTION_LEVELS; i++) {
-            // printf("cache[%d][%d]\n", i, cache_indexes[i]);
             line[request->processor_id][i] = this->instruction_cache[i][cache_indexes[i]].installLine(request, latency_request, llc_idx, llc_line);
-            //ORCS_PRINTF ("INST Installed addr: %lu, level: %u ", instructionAddress, i)
-            //this->instruction_cache[i][cache_indexes[i]].printTagIdx (instructionAddress);
         }
     } else {
         i = 0;
     }
-    for (; i < POINTER_LEVELS; i++) {
-        // printf("cache[%d][%d]\n", i, cache_indexes[i]);
+    
+    // -----------------------------------------------------------------------------------------
+    // Instala na cache de dados (para instruções, apenas se houverem mais que de instruções)
+    // -----------------------------------------------------------------------------------------
+    for (; i < DATA_LEVELS; i++) {
         line[request->processor_id][i] = this->data_cache[i][cache_indexes[i]].installLine(request, latency_request, llc_idx, llc_line);
-        //ORCS_PRINTF ("DATA Installed addr: %lu, level: %u ", instructionAddress, i)
-        //this->data_cache[i][cache_indexes[i]].printTagIdx (instructionAddress);
     }
 
+    // -----------------------------------------------------------------------------------------
+    // Vincula cada nível da cache com todos os demais
+    // -----------------------------------------------------------------------------------------
     for (i = 0; i < POINTER_LEVELS; i++) {
         for (j = 0; j < POINTER_LEVELS; j++) {
             if (i == j) {
@@ -295,6 +313,10 @@ void cache_manager_t::installCacheLines(memory_package_t* request, int32_t *cach
             line[request->processor_id][i]->line_ptr_caches[request->processor_id][j] = line[request->processor_id][j];
         }
     }
+
+    // -----------------------------------------------------------------------------------------
+    // Limpa e libera os dados utilizados
+    // -----------------------------------------------------------------------------------------
     for (i = 0; i < NUMBER_OF_PROCESSORS; i++) {
         for (j = 0; j < POINTER_LEVELS; j++) {
             line[i][j] = NULL;
@@ -431,24 +453,31 @@ void cache_manager_t::install (memory_package_t* request){
     #if PROCESSOR_DEBUG 
         ORCS_PRINTF("%lu Cache Manager installCache(): %lu in processor %u\n", orcs_engine.get_global_cycle(), request->memory_address, request->processor_id);
     #endif
+
+    // -----------------------------------------------------------------------------------------
+    // Obtém as caches onde a requisição deve ter seus dados instalados
+    // -----------------------------------------------------------------------------------------
     int32_t *cache_indexes = new int32_t[POINTER_LEVELS]();
     this->generateIndexArray(request->processor_id, cache_indexes);
+
+    // -----------------------------------------------------------------------------------------
+    // Instala as linhas de cache de acordo com cada requisição
+    // -----------------------------------------------------------------------------------------
     switch (request->memory_operation){
         case MEMORY_OPERATION_INST:{
-            // printf("instruction");
-            //printf("Installing from DRAM\n");
             this->installCacheLines(request, cache_indexes, 0, INSTRUCTION);
             break;
         }
         case MEMORY_OPERATION_READ:{
-            // printf("read");
             this->installCacheLines(request, cache_indexes, 0, DATA);
             break;
         }
         case MEMORY_OPERATION_WRITE:{
-            // printf("write");
-            
             this->installCacheLines(request, cache_indexes, 0, DATA);
+
+            // -----------------------------------------------------------------------------------------
+            // Propaga a escrita para todos os níveis de cache
+            // -----------------------------------------------------------------------------------------
             int cache_level = DATA_LEVELS - 1;
             for (int32_t k = cache_level - 1; k >= 0; k--) {
                 this->data_cache[k+1][cache_indexes[k+1]].add_cache_write();
@@ -510,39 +539,52 @@ void cache_manager_t::process (memory_package_t* request, int32_t* cache_indexes
         case MEMORY_OPERATION_READ:
         case MEMORY_OPERATION_WRITE:
         case MEMORY_OPERATION_INST:
-            //printf("%lu: Trying to process ins: %lu Ready at: %lu(flag LRU)\n", orcs_engine.get_global_cycle(), request->opcode_address, request->readyAt);
-            if (request->next_level < DATA_LEVELS){
+            // -----------------------------------------------------------------------------------------
+            // Verifica se o próximo nível a procurar ainda é nas caches
+            // -----------------------------------------------------------------------------------------
+            if ((request->next_level < DATA_LEVELS) ||
+                (request->memory_operation == MEMORY_OPERATION_INST && request->next_level < INSTRUCTION_LEVELS)){
+                // -----------------------------------------------------------------------------------------
+                // Verifica se é um pacote que precisa se tratado e já está pronto para isso
+                // -----------------------------------------------------------------------------------------
                 if (request->status == PACKAGE_STATE_UNTREATED && request->readyAt <= orcs_engine.get_global_cycle()){
-                    if (request->memory_operation == MEMORY_OPERATION_INST && request->next_level == L1) {
-                        //printf("Processing %lu (flag LRU)\n", request->memory_address);
+                    // -----------------------------------------------------------------------------------------
+                    // Decide em que tipo de cache irá procurar
+                    // -----------------------------------------------------------------------------------------
+                    if (request->memory_operation == MEMORY_OPERATION_INST && request->next_level < INSTRUCTION_LEVELS) {
                         cache = &this->instruction_cache[request->next_level][cache_indexes[request->next_level]];
-                    } else cache = &this->data_cache[request->next_level][cache_indexes[request->next_level]];
+                    } else {
+                        cache = &this->data_cache[request->next_level][cache_indexes[request->next_level]];
+                    } 
+                    // -----------------------------------------------------------------------------------------
+                    // Verifica se o nível de cache tem espaço para novas requisições
+                    // -----------------------------------------------------------------------------------------
                     if (cache->count < cache->mshr_size) {
                         #if MEMORY_DEBUG
                             ORCS_PRINTF (" sent to %s |", get_enum_cache_level_char ((cacheLevel_t) request->next_level))
                         #endif
-                        /*if (request->memory_operation == MEMORY_OPERATION_WRITE && request->memory_size == this->get_LINE_SIZE()){
-                            request->updatePackageWait(this->data_cache[request->next_level][cache_indexes[request->processor_id]].latency);
-                            request->sent_to_ram = true;
-                        } 
-                        else */
+                        // -----------------------------------------------------------------------------------------
+                        // Faz a busca no nível de cache
+                        // -----------------------------------------------------------------------------------------
                         this->cache_search (request, cache, cache_indexes);
-                    }/* else {
-                        printf("Greater than mshr\n");
-                    }*/
+                    }
                 }
-            } else if (!request->sent_to_ram) {
+            }
+            // -----------------------------------------------------------------------------------------
+            // Caso tenha ultrapassado as caches, envia a requisição para a DRAM.
+            // -----------------------------------------------------------------------------------------
+            else if (!request->sent_to_ram) {
                 #if MEMORY_DEBUG 
                     ORCS_PRINTF (" sent to RAM.\n")
                 #endif
                 
                 // Check if its the first load request from RVV
-                if (((memory_order_buffer_line_t *) request->clients[0])->is_first_of_vector_load) {
+                // // The read check is necessary because writes do not have clients
+                if ((request->memory_operation == MEMORY_OPERATION_READ) && (((memory_order_buffer_line_t *) request->clients[0])->is_first_of_vector_load)) {
                     
                     // Change the request memory_size
                     request->memory_size = (request->memory_size < orcs_engine.processor->get_SIMULATED_VECTOR_LOAD_SIZE()) ?
                                            orcs_engine.processor->get_SIMULATED_VECTOR_LOAD_SIZE() : request->memory_size;
-
                 }
 
 
@@ -595,19 +637,38 @@ void cache_manager_t::clock() {
     // printf("clock executing\n");
     if (requests.size() > 0) {
         int32_t *cache_indexes = new int32_t[POINTER_LEVELS]();
+
+        // -----------------------------------------------------------------------------------------
+        // Para cada requisição feita às caches
+        // -----------------------------------------------------------------------------------------
         for (size_t i = 0; i < requests.size(); i++){
-            /*if (requests[i]->memory_operation == MEMORY_OPERATION_INST)
-            {
-                printf("Avaliando request: %lu [Type: %s] (Ready at: %lu)(flag LRU)\n", requests[i]->memory_address, get_enum_memory_operation_char(requests[i]->memory_operation), requests[i]->readyAt);
-            }*/
+            // -----------------------------------------------------------------------------------------
+            // Se a requisição está pronta
+            // -----------------------------------------------------------------------------------------
             if (requests[i]->readyAt <= orcs_engine.get_global_cycle()){
+                // -----------------------------------------------------------------------------------------
+                // Obtém em quais caches esses dados deveriam estar posicionados
+                // -----------------------------------------------------------------------------------------
                 generateIndexArray(requests[i]->processor_id, cache_indexes);
+
+                // -----------------------------------------------------------------------------------------
+                // Se o pacote está esperando ser finalizado
+                // -----------------------------------------------------------------------------------------
                 if (requests[i]->status == PACKAGE_STATE_WAIT){
+                    // -----------------------------------------------------------------------------------------
+                    // Se ele foi completado pela DRAM, instala nas caches
+                    // -----------------------------------------------------------------------------------------
                     if (requests[i]->sent_to_ram) this->install (requests[i]);
-                    //if (requests[i]->memory_operation == MEMORY_OPERATION_INST) printf("%lu: Finishing request %lu (flag LRU)\n", orcs_engine.get_global_cycle(), requests[i]->opcode_address);
+                    
+                    // -----------------------------------------------------------------------------------------
+                    // Contabiliza estatísticas e remove a requisição
+                    // -----------------------------------------------------------------------------------------
                     this->finishRequest (requests[i], cache_indexes);
                     --i;
                 }
+                // -----------------------------------------------------------------------------------------
+                // Se ainda precisa de requisições, o envia para o próximo no nível de cache/DRAM
+                // -----------------------------------------------------------------------------------------
                 else if (!requests[i]->sent_to_ram) this->process (requests[i], cache_indexes);
             }
 
@@ -627,49 +688,77 @@ uint32_t cache_manager_t::searchAddress(uint64_t instructionAddress, cache_t *ca
 }
 
 cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t* cache, int32_t* cache_indexes){
-    // Se essa condição for falsa a transferência de dados entre níveis dá errado.
-    assert(INSTRUCTION_LEVELS < DATA_LEVELS);
     #if PROCESSOR_DEBUG
         ORCS_PRINTF ("%lu Cache Manager cache_search(): memory = %lu | level = %u, type = %s, count = %u -> count = %u, %s, %lu\n", orcs_engine.get_global_cycle(), requests.size(), request->next_level, get_enum_cache_type_char ((cacheId_t) cache->id), cache->get_count(), cache->get_count()+1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
     #endif
+
+    // -----------------------------------------------------------------------------------------
+    // Verifica se está no nível da cache (next_level)
+    // -----------------------------------------------------------------------------------------
+
     uint32_t cache_status = 0, ttc = 0;
     cache_status = this->searchAddress(request->memory_address, cache, &request->cache_latency, &ttc);
-    cache->cache_count_per_type[request->memory_operation]++;    
+    cache->cache_count_per_type[request->memory_operation]++;
+
+    // -----------------------------------------------------------------------------------------
+    // Marca que foi enviado ao nível next_level e em que ciclo isso aconteceu.
+    // -----------------------------------------------------------------------------------------
     request->sent_to_cache_level[request->next_level] = 1;
     request->sent_to_cache_level_at[request->next_level] = orcs_engine.get_global_cycle();
     
+
     if (cache_status == HIT) {
         #if MEMORY_DEBUG 
             ORCS_PRINTF (" HIT!\n");
         #endif
+
+        // -----------------------------------------------------------------------------------------
+        // Se foi um hit, trata diferente leituras e escritas de instruções
+        // -----------------------------------------------------------------------------------------
         switch (request->memory_operation){
             case MEMORY_OPERATION_READ:
             case MEMORY_OPERATION_WRITE:
+                // -----------------------------------------------------------------------------------------
+                // Puxa o dado de cada um dos próximos níveis (ex. se foi hit na L2 => L2 -> L1 e L1 -> L0)
+                // -----------------------------------------------------------------------------------------
                 if (request->next_level != 0) {
                     for (int32_t i = request->next_level - 1; i >= 0; i--) {
                         this->data_cache[i+1][cache_indexes[i+1]].returnLine(request, &this->data_cache[i][cache_indexes[i]]);
                     }
                 }
+                // -----------------------------------------------------------------------------------------
+                // Escreve o que precisar na linha recém carregada
+                // -----------------------------------------------------------------------------------------
                 if (request->memory_operation == MEMORY_OPERATION_WRITE) this->data_cache[0][cache_indexes[0]].write(request);
             break;
             case MEMORY_OPERATION_INST:
-                //printf("Hit %lu on cache level %u\n", request->memory_address, cache->level);
-    
-                if (request->next_level != 0 && cache->level < INSTRUCTION_LEVELS/*cache->level == L1*/) {
-                    for (int32_t i = INSTRUCTION_LEVELS - 2; i >= 0; i--) {
-                        //printf("Installing on level %d\n", i);
+
+                // -----------------------------------------------------------------------------------------
+                // Puxa o dado dos próximos níveis de cache de instrução
+                // -----------------------------------------------------------------------------------------
+                if (request->next_level != 0 && (request->next_level < INSTRUCTION_LEVELS)) {
+                    for (int32_t i = request->next_level - 1; i >= 0; i--) {
                         this->instruction_cache[i+1][cache_indexes[i+1]].returnLine(request, &this->instruction_cache[i][cache_indexes[i]]);
                     }
-                } else if (request->next_level != 0) {
-                    //printf("Encontrou em uma cache de dados\n");
-                    // Between data caches
+                } 
+                // -----------------------------------------------------------------------------------------
+                // Caso esteja em uma cache de nível maior que as de instruções, com certeza é uma de dados
+                // -----------------------------------------------------------------------------------------
+                else if (request->next_level != 0) {
+                    // -----------------------------------------------------------------------------------------
+                    // Puxa o dado entre os níveis de cache de dados
+                    // -----------------------------------------------------------------------------------------
                     for (uint32_t i = request->next_level - 1; i >= INSTRUCTION_LEVELS; i--) {
                         this->data_cache[i+1][cache_indexes[i+1]].returnLine(request, &this->data_cache[i][cache_indexes[i]]);
                     }
-                    // From D to I caches
+                    // -----------------------------------------------------------------------------------------
+                    // Puxa o dado da cache de dados para a cache de instruções
+                    // -----------------------------------------------------------------------------------------
                     this->data_cache[INSTRUCTION_LEVELS][cache_indexes[INSTRUCTION_LEVELS]].returnLine(request, &this->instruction_cache[INSTRUCTION_LEVELS - 1][cache_indexes[INSTRUCTION_LEVELS - 1]]);
-
-                    // Between I caches
+                    
+                    // -----------------------------------------------------------------------------------------
+                    // Puxa o dado entre as caches de instruções
+                    // -----------------------------------------------------------------------------------------
                     for (int32_t i = INSTRUCTION_LEVELS - 2; i >= 0; i--) {
                         this->instruction_cache[i+1][cache_indexes[i+1]].returnLine(request, &this->instruction_cache[i][cache_indexes[i]]);
                     }
@@ -688,6 +777,9 @@ cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t
         return HIT;
     }
 
+    // -----------------------------------------------------------------------------------------
+    // Em caso de miss, só marca que o next_level é o próximo (next_level++)
+    // -----------------------------------------------------------------------------------------
     #if MEMORY_DEBUG
         ORCS_PRINTF (" MISS!\n");
     #endif

@@ -167,7 +167,15 @@ bool memory_channel_t::addRequest (memory_package_t* request){
         ORCS_PRINTF ("[DRAM] %lu %lu %s enters DRAM channel.\n", orcs_engine.get_global_cycle(), request->memory_address, get_enum_memory_operation_char (request->memory_operation))
     #endif
     bool result = false;
+
+    // -----------------------------------------------------------------------------------------
+    // Obtém o número do banco de onde o dado será lido/escrito
+    // -----------------------------------------------------------------------------------------
     uint64_t bank = this->get_bank(request->memory_address);
+
+    // -----------------------------------------------------------------------------------------
+    // Adiciona às listas de requisições do banco
+    // -----------------------------------------------------------------------------------------
     switch (request->memory_operation){
         case MEMORY_OPERATION_READ:
         case MEMORY_OPERATION_INST:
@@ -308,13 +316,30 @@ memory_package_t* memory_channel_t::findNextWrite (uint32_t bank){
 
 void memory_channel_t::clock(){
     uint32_t bank = 0, row = 0;
+    // -----------------------------------------------------------------------------------------
+    // A cada ciclo de clock opera sobre um banco
+    // -----------------------------------------------------------------------------------------
     this->last_bank_selected = (this->last_bank_selected + 1) % this->BANK;
+
+    // -----------------------------------------------------------------------------------------
+    // Obtém a próxima requisição a ser processada nesse banco
+    // -----------------------------------------------------------------------------------------
     memory_package_t* current_entry = this->findNext (this->last_bank_selected);
     if (current_entry != NULL) {
+
+        // -----------------------------------------------------------------------------------------
+        // Obtém a localização do dado dentro do memory channel
+        // -----------------------------------------------------------------------------------------
         bank = this->get_bank(current_entry->memory_address);
         row = this->get_row(current_entry->memory_address);
         
+        // -----------------------------------------------------------------------------------------
+        // Se o banco ainda não tem uma operação de leitura/escrita/acesso concluída
+        // -----------------------------------------------------------------------------------------
         if (!bank_is_ready[bank]){
+            // -----------------------------------------------------------------------------------------
+            // Processa o último comando enviado a esse banco
+            // -----------------------------------------------------------------------------------------
             switch (bank_last_command[bank]){
                 case MEMORY_CONTROLLER_COMMAND_NUMBER:
                     ERROR_PRINTF("Should not receive COMMAND_NUMBER\n")

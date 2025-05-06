@@ -196,22 +196,42 @@ void memory_controller_t::clock(){
 
     if (working.size() == 0) return;
 
+    // -----------------------------------------------------------------------------------------
+    // Verifica cada requisição recebida
+    // -----------------------------------------------------------------------------------------
     for (i = 0; i < working.size(); i++){
+        // -----------------------------------------------------------------------------------------
+        // Se ainda não foi buscada, mas está pronta
+        // -----------------------------------------------------------------------------------------
         if (working[i]->status != PACKAGE_STATE_DRAM_FETCH && working[i]->status != PACKAGE_STATE_DRAM_READY){
+            // -----------------------------------------------------------------------------------------
+            // Envia essa requisição ao canal de memória correto
+            // -----------------------------------------------------------------------------------------
             if (this->channels[get_channel (working[i]->memory_address)].addRequest (working[i])) {
                 working[i]->ram_cycle = orcs_engine.get_global_cycle();
                 working[i]->updatePackageDRAMFetch (0);
             }
-        } else if (working[i]->status == PACKAGE_STATE_DRAM_READY && working[i]->readyAt <= orcs_engine.get_global_cycle()){
+        }
+        // -----------------------------------------------------------------------------------------
+        // Se já foi buscada e os dados estão prontos
+        // -----------------------------------------------------------------------------------------
+        else if (working[i]->status == PACKAGE_STATE_DRAM_READY && working[i]->readyAt <= orcs_engine.get_global_cycle()){
+            // -----------------------------------------------------------------------------------------
+            // Contabiliza estatísticas
+            // -----------------------------------------------------------------------------------------
             wait_time = (orcs_engine.get_global_cycle() - working[i]->ram_cycle);
             #if MEMORY_DEBUG
                 ORCS_PRINTF ("[MEMC] %lu %lu %s finishes at main memory! Took %lu cycles.\n", orcs_engine.get_global_cycle(), working[i]->memory_address, get_enum_memory_operation_char (working[i]->memory_operation), wait_time)
             #endif
+
             working[i]->updatePackageWait (1);
             this->total_operations[working[i]->memory_operation]++;
             if (wait_time < this->min_wait_operations[working[i]->memory_operation]) this->min_wait_operations[working[i]->memory_operation] = wait_time;
             if (wait_time > this->max_wait_operations[working[i]->memory_operation]) this->max_wait_operations[working[i]->memory_operation] = wait_time;
             this->total_latency[working[i]->memory_operation] += wait_time;
+            // -----------------------------------------------------------------------------------------
+            // Remove da lista de requisições
+            // -----------------------------------------------------------------------------------------
             working.erase(std::remove(working.begin(), working.end(), working[i]), working.end());
             working.shrink_to_fit();
         }

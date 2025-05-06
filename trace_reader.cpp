@@ -468,8 +468,9 @@ bool trace_reader_t::trace_next_memory(uint64_t *mem_address, uint32_t *mem_size
                 count += (file_line[i] == ' ');
                 i++;
             }
-            ERROR_ASSERT_PRINTF(count == 3, "Error converting Text to Memory (Wrong  number of fields %d)\n", count)
             DEBUG_PRINTF("Memory trace line: %s\n", file_line);
+            ERROR_ASSERT_PRINTF(count == 3, "Error converting Text to Memory (Wrong  number of fields %d)\n", count)
+
 
             sub_string = strtok_r(file_line, " ", &tmp_ptr);
             *mem_is_read = strcmp(sub_string, "R") == 0;
@@ -798,7 +799,7 @@ bool trace_reader_t::trace_fetch(opcode_package_t *m) {
     bool mem_is_read;
     uint32_t num_reads = (m->num_reads != UINT32_MAX) ? m->num_reads
 									                  : trace_next_num_accesses();
-    printf("Num reads: %u\n", num_reads);
+
     for (uint32_t r=0; r < num_reads; ++r) {
         trace_next_memory(&m->reads_addr[r], &m->reads_size[r], &mem_is_read);
         m->reads_addr[r] |= this->address_translation;
@@ -814,6 +815,9 @@ bool trace_reader_t::trace_fetch(opcode_package_t *m) {
         ERROR_ASSERT_PRINTF(mem_is_read == false, "Expecting a write from memory trace\n");
     }
 
+    m->num_reads = num_reads;
+    m->num_writes = num_writes;
+
 
     //if (m->is_read || m->is_read2 || m->is_write) ORCS_PRINTF (" operation = %s \n", get_enum_instruction_operation_char (m->opcode_operation))
 
@@ -822,7 +826,6 @@ bool trace_reader_t::trace_fetch(opcode_package_t *m) {
 }
 // =====================================================================
 uint32_t trace_reader_t::trace_next_num_accesses() {
-    printf("Em trace_next_num_accesses\n");
     static char file_line[TRACE_LINE_SIZE];
     file_line[0] = '\0';
 
@@ -845,7 +848,7 @@ uint32_t trace_reader_t::trace_next_num_accesses() {
             continue;
         }
         else {
-            ERROR_ASSERT_PRINTF(file_line[0] != '$', "Error searching for num accesses in line %s\n", file_line);
+            ERROR_ASSERT_PRINTF(file_line[0] == '$', "Error searching for num accesses in line %s\n", file_line);
 
             uint32_t num_accesses = (uint32_t)strtoul(file_line + 1, NULL, 10);
             assert(num_accesses <= MAX_MEM_OPERATIONS);
