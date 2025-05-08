@@ -1236,15 +1236,26 @@ void processor_t::decode()
 		}
 		else
 		{
-			if (instr->num_reads <= 2) num_uops += instr->num_reads;
-			else {
-				num_uops += 1; // Gather
+			if (instr->num_reads <= 2) {
+			    num_uops += instr->num_reads;
+
+			} else if (instr->num_reads > MOB_READ) {
+			    num_uops += ceil((instr->num_reads + 0.0f) / MOB_READ);
+
+			} else {
+			    num_uops += 1; // Small Gather
 			}
 
-			if (instr->num_writes <= 1) num_uops += instr->num_writes;
-			else {
-				num_uops += 1; // Scatter
+			if (instr->num_writes <= 1) {
+				num_uops += instr->num_writes;
+
+			} else if (instr->num_writes > MOB_WRITE) {
+				num_uops += ceil((instr->num_writes + 0.0f) / MOB_WRITE);
+
+			} else {
+				num_uops += 1; // Small Scatter
 			}
+
 
 			num_uops += (instr_op == INSTRUCTION_OPERATION_BRANCH);
 
@@ -1450,6 +1461,7 @@ void processor_t::decode()
 		// =====================
 		//// Read 1 and Read 2
 		if (instr->num_reads <= 2) {
+
 			for (uint32_t r = 0; r < instr->num_reads; ++r)
 			{
 			new_uop.package_clean();
@@ -1458,6 +1470,59 @@ void processor_t::decode()
 								  this->LATENCY_MEM_LOAD, this->WAIT_NEXT_MEM_LOAD, &(this->fu_mem_load),
 								  *this->fetchBuffer.front(), uops_created, is_masked);
 			new_uop.add_memory_operation(instr->reads_addr[r], instr->reads_size[r]);
+			++uops_created;
+			// If op is not load, clear registers
+			if ((uops.size() > 0) || (instr_op == INSTRUCTION_OPERATION_BRANCH) || (instr->num_writes > 0))
+			 //(instr_op != INSTRUCTION_OPERATION_MEM_LOAD)
+			{
+				// ===== Read Regs =============================================
+				if (instr->base_reg != UINT32_MAX) { // x86 -> RISC-V base/index are already in RRegs
+					/// Clear RRegs
+					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+					{
+						new_uop.read_regs[i] = POSITION_FAIL;
+					}
+					/// Insert BASE and INDEX into RReg
+					new_uop.read_regs[0] = instr->base_reg;
+					new_uop.read_regs[1] = instr->index_reg;
+				}
+				// ===== Write Regs =============================================
+				/// Clear WRegs
+				for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+				{
+					new_uop.write_regs[i] = POSITION_FAIL;
+				}
+				/// Insert UOPS_LINK_REGISTER into WRegs
+				new_uop.write_regs[0] = UOPS_LINK_REGISTER;
+			}
+
+			new_uop.updatePackageWait(DECODE_LATENCY);
+			new_uop.born_cycle = orcs_engine.get_global_cycle();
+			this->total_operations[new_uop.opcode_operation]++;
+			statusInsert = this->decodeBuffer.push_back(new_uop);
+
+
+			#if DECODE_DEBUG
+				ORCS_PRINTF("TYPE 5: uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
+			#endif
+			ERROR_ASSERT_PRINTF(statusInsert != POSITION_FAIL,
+								"Erro, Tentando decodificar mais uops que o maximo permitido");
+			}
+		} 
+		// big Gather
+		else if (instr->num_reads > MOB_READ) {
+			for (uint32_t r = 0; r < instr->num_reads; r += MOB_READ)
+			{
+			new_uop.package_clean();
+			new_uop.opcode_to_uop(this->uopCounter++,
+								  INSTRUCTION_OPERATION_MEM_LOAD,
+								  this->LATENCY_MEM_LOAD, this->WAIT_NEXT_MEM_LOAD, &(this->fu_mem_load),
+								  *this->fetchBuffer.front(), uops_created, is_masked);
+
+			for (uint32_t req = 0; req < MOB_READ; ++req) {
+        	     new_uop.add_memory_operation(instr->reads_addr[r + req], instr->reads_size[r + req]);
+			}
+
 			++uops_created;
 			// If op is not load, clear registers
 			if ((uops.size() > 0) || (instr_op == INSTRUCTION_OPERATION_BRANCH) || (instr->num_writes > 0))
@@ -1749,8 +1814,82 @@ void processor_t::decode()
 		//Decode Write
 		// =====================
 		// Last write uops from an instruction
-		if (instr->num_writes > 0)
-		{
+		//// Big scatter
+		if (instr->num_writes > MOB_WRITE) {
+			// One uop per store
+			for (uint32_t w = 0; w < instr->num_writes; w += MOB_WRITE) {
+				new_uop.package_clean();
+				new_uop.opcode_to_uop(this->uopCounter++,
+									INSTRUCTION_OPERATION_MEM_STORE,
+									this->LATENCY_MEM_STORE,
+									this->WAIT_NEXT_MEM_STORE,
+									&(this->fu_mem_store),
+									*instr, uops_created, is_masked);
+
+				for (uint32_t req = 0; req < MOB_WRITE; ++req) {
+				    new_uop.add_memory_operation(instr->writes_addr[w + req], instr->writes_size[w + req]);
+				}
+
+
+				++uops_created;
+
+				// It there are other uops from the same instruction that this uop depends on
+				if ((uops_created-1) > w) {
+					// Create a dependency with the previous uop from the same instruction
+					bool inserted_UOPS_LINK_REGISTER = false;
+					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+					{
+						new_uop.read_regs[i] = POSITION_FAIL;
+					}
+					/// Insert UOPS_LINK_REGISTER into RRegs
+					new_uop.read_regs[0] = UOPS_LINK_REGISTER;
+					inserted_UOPS_LINK_REGISTER = true;
+
+
+
+					ERROR_ASSERT_PRINTF(inserted_UOPS_LINK_REGISTER,
+										"Could not insert register_%d, all MAX_REGISTERS(%d) used.", UOPS_LINK_REGISTER, MAX_REGISTERS)
+
+					// ===== Write Regs =============================================
+					/// Clear WRegs
+					// This is the specific uop for store within an instruction.
+					// The uops before already wrote in the register.
+					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+					{
+						new_uop.write_regs[i] = POSITION_FAIL;
+					}
+				}
+
+				new_uop.updatePackageWait(DECODE_LATENCY);
+				new_uop.born_cycle = orcs_engine.get_global_cycle();
+				this->total_operations[new_uop.opcode_operation]++;
+				statusInsert = this->decodeBuffer.push_back(new_uop);
+
+
+#if DECODE_DEBUG
+					ORCS_PRINTF("TYPE 9: uop created %s\n", this->decodeBuffer.back()->content_to_string2().c_str())
+#endif
+
+				ERROR_ASSERT_PRINTF(statusInsert != POSITION_FAIL,
+									"Erro, Tentando decodificar mais uops que o maximo permitido")
+#if PROCESSOR_DEBUG
+				assert(new_uop.uop_operation != -1);
+				ORCS_PRINTF("%lu processor %lu decode(): addr %lu uop %lu %s, readyAt %lu, fetchBuffer: %u, decodeBuffer: %u, robUsed: %u.\n",
+							orcs_engine.get_global_cycle(),
+							this->processor_id,
+							new_uop.opcode_address,
+							new_uop.uop_number,
+							get_enum_instruction_operation_char(new_uop.uop_operation),
+							new_uop.readyAt,
+							this->fetchBuffer.get_size(),
+							this->decodeBuffer.get_size(),
+							reorderBuffer.robUsed);
+#endif
+
+			}
+		}
+		//// Store and small scatter
+		else if (instr->num_writes > 0) {
 			
 				new_uop.package_clean();
 				new_uop.opcode_to_uop(this->uopCounter++,
@@ -1823,7 +1962,7 @@ void processor_t::decode()
 
 		this->fetchBuffer.pop_front();
 	
-
+		assert(uops_created == num_uops);
 	}
 
 }
