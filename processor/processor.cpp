@@ -487,11 +487,6 @@ void processor_t::allocate()
 
 	// libconfig::Setting &cfg_root = orcs_engine.configuration->getConfig();
 	// libconfig::Setting &cfg_processor = cfg_root[“PROCESSOR”][0];
-	if (cfg_processor.exists("SIMULATED_VECTOR_LOAD_SIZE"))
-		set_SIMULATED_VECTOR_LOAD_SIZE(cfg_processor["SIMULATED_VECTOR_LOAD_SIZE"]);
-	else
-		set_SIMULATED_VECTOR_LOAD_SIZE(0);
-
 
 	if (cfg_processor.exists("IN_ORDER"))
       { 	

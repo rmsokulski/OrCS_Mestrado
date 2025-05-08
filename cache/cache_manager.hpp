@@ -44,7 +44,28 @@ class cache_manager_t {
         uint32_t NUMBER_OF_PROCESSORS;
         uint32_t MAX_PARALLEL_REQUESTS_CORE;
 
+        // Minimum number of bytes loaded by each first vector load;
+        // Default is 0
+        uint32_t SIMULATED_VECTOR_LOAD_SIZE;
+
+        // Prefetch MOB entries
+        uint32_t MOB_SIMULATED_VECTOR_LOAD_ENTRIES;
+
         std::vector<memory_package_t*> requests;
+        std::vector<memory_package_t *> requests_prefetch;
+
+        // Conjunto de pacotes disponíveis para prefetch
+        memory_package_t *request_memory_packages;
+        uint32_t request_memory_packages_start;
+        uint32_t request_memory_packages_end;
+        uint32_t request_memory_packages_used;
+        
+        // Retorna o próximo pacote disponível (ou NULL)
+        memory_package_t *get_next_prefetch_package();
+
+        // Statistics
+        uint64_t prefetch_requests_sent;
+
         cache_t **instantiate_cache(cacheId_t cache_type, libconfig::Setting &cfg_cache_defs);
         void get_cache_levels(cacheId_t cache_type, libconfig::Setting &cfg_cache_defs);
         void get_cache_info(cacheId_t cache_type, libconfig::Setting &cfg_cache_defs, cache_t *cache, uint32_t cache_level, uint32_t CACHE_AMOUNT);
@@ -61,7 +82,7 @@ class cache_manager_t {
         cache_status_t cache_search (memory_package_t* request, cache_t* cache, int32_t* cache_indexes);
         void process (memory_package_t* request, int32_t* cache);
         void requestCache (memory_package_t* request);
-        void finishRequest (memory_package_t* request, int32_t* cache_indexes);
+        void finishRequest (memory_package_t* request, int32_t* cache_indexes, std::vector<memory_package_t *>* requests_list, bool is_prefetch);
         void install (memory_package_t* request);
 
     public:
@@ -116,7 +137,12 @@ class cache_manager_t {
         INSTANTIATE_GET_SET_ADD(uint32_t, NUMBER_OF_PROCESSORS)
         INSTANTIATE_GET_SET_ADD(uint32_t, MAX_PARALLEL_REQUESTS_CORE)
 
+        INSTANTIATE_GET_SET_ADD (uint32_t, SIMULATED_VECTOR_LOAD_SIZE)
+        INSTANTIATE_GET_SET_ADD (uint32_t, MOB_SIMULATED_VECTOR_LOAD_ENTRIES)
+
+
         prefetcher_t *prefetcher;
+        void remove_front_prefetch_package();
 };  
 
 #endif // !CACHE_MANAGER_H

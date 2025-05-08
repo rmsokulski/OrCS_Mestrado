@@ -39,6 +39,27 @@
                         ORCS_PRINTF("INFO : EVENT OCUURED AT Cycle: %" PRIu64 "\n", orcs_engine.get_global_cycle());\
                         exit(EXIT_SUCCESS);\
                         }
+
+#define INFO_REACHED(...){\
+                            ORCS_PRINTF("[OrCS %lu] %s::%s(%d) -- ", orcs_engine.get_global_cycle(),__FILE__, __func__, __LINE__);\
+                            ORCS_PRINTF(__VA_ARGS__);\
+                            ORCS_PRINTF("\n");\
+                            fflush(stdout);\
+                            }
+
+#define INFO_MEMORY_PACKAGE(...) do {\
+                                        ORCS_PRINTF("[CHANNEL %u] ", this->id);\
+                                        ORCS_PRINTF(__VA_ARGS__);\
+                                        ORCS_PRINTF("\n");\
+                                        fflush(stdout);\
+                                    } while(0)
+
+#define INFO_MEMORY_FUNCTION(...) do {\
+                                        ORCS_PRINTF("[CHANNEL %u] %s:", this->id, __func__);\
+                                        ORCS_PRINTF(__VA_ARGS__);\
+                                        ORCS_PRINTF("\n");\
+                                        fflush(stdout);\
+                                    } while(0)
 // ============================================================================
 /// MACROS to create get_ and set_ methods for variables.
 // ============================================================================

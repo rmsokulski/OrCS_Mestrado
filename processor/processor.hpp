@@ -415,10 +415,6 @@ class processor_t {
         uint64_t* max_wait_operations;
         uint64_t wait_time;
 
-		// Minimum number of bytes loaded by each first vector load;
-		// Default is 0
-		uint32_t SIMULATED_VECTOR_LOAD_SIZE;
-
 		bool IN_ORDER;
 
 
@@ -577,7 +573,6 @@ class processor_t {
 		INSTANTIATE_GET_SET_ADD(uint32_t,CACHE_LEVELS)
 		
 		// ====================================================================
-		INSTANTIATE_GET_SET_ADD (uint32_t, SIMULATED_VECTOR_LOAD_SIZE)
 		INSTANTIATE_GET_SET (bool, IN_ORDER)
 
 };

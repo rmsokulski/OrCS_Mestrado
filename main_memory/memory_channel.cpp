@@ -105,6 +105,7 @@ void memory_channel_t::allocate() {
 
     this->bank_read_requests = new std::vector<memory_package_t*>[BANK]();
     this->bank_write_requests = new std::vector<memory_package_t*>[BANK]();
+
     this->set_masks();
 }
 

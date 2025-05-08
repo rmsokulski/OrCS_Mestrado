@@ -41,6 +41,8 @@ class memory_package_t {
         memory_operation_t memory_operation;    /// memory operation
         std::vector<memory_request_client_t*> clients; ///update these
 
+        bool free;
+
         memory_package_t();
         ~memory_package_t();
 
@@ -55,4 +57,7 @@ class memory_package_t {
         void updatePackageDRAMReady(uint32_t stallTime);
         void updateClients();
         void printPackage();
+
+        void copy(memory_package_t *other);
+        void package_clean();
 };
