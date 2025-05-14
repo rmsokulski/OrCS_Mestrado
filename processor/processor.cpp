@@ -498,11 +498,12 @@ void processor_t::allocate()
 
 	if (cfg_processor.exists("SUPERSCALAR_IN_ORDER"))
 	{ 
-	  set_SUPERSCALAR_IN_ORDER(cfg_processor["SUPERSCALAR_IN_ORDER"] ? true : false); 
+	  int32_t superscalar_in_order = cfg_processor["SUPERSCALAR_IN_ORDER"];
+	  set_SUPERSCALAR_IN_ORDER(superscalar_in_order ? true : false); 
 	  ERROR_ASSERT_PRINTF (!IN_ORDER || !SUPERSCALAR_IN_ORDER, "SUPERSCALAR_IN_ORDER and IN_ORDER cannot be active simultaneously (IN_ORDER is more restrictive than the other)\n");
 	}
 	else
-	{ set_IN_ORDER(false); }
+	{ set_SUPERSCALAR_IN_ORDER(false); }
 
 
 
