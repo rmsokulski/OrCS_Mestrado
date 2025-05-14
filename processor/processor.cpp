@@ -496,6 +496,15 @@ void processor_t::allocate()
     else
 	  { set_IN_ORDER(false); }
 
+	if (cfg_processor.exists("SUPERSCALAR_IN_ORDER"))
+	{ 
+	  set_SUPERSCALAR_IN_ORDER(cfg_processor["SUPERSCALAR_IN_ORDER"] ? true : false); 
+	  ERROR_ASSERT_PRINTF (!IN_ORDER || !SUPERSCALAR_IN_ORDER, "SUPERSCALAR_IN_ORDER and IN_ORDER cannot be active simultaneously (IN_ORDER is more restrictive than the other)\n");
+	}
+	else
+	{ set_IN_ORDER(false); }
+
+
 
 	//======================================================================
 	// Initializating variables
@@ -1313,6 +1322,34 @@ void processor_t::decode()
 				new_uop.updatePackageWait(DECODE_LATENCY);
 				new_uop.born_cycle = orcs_engine.get_global_cycle();
 				this->total_operations[new_uop.opcode_operation]++;
+
+				// ****************************************************
+				// SUPERSCALAR IN ORDER processor
+				if (SUPERSCALAR_IN_ORDER) {
+					if (uops_created == 1) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.read_regs[i] == POSITION_FAIL)
+						{
+							new_uop.read_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+
+						}
+					} else if (uops_created == num_uops) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.write_regs[i] == POSITION_FAIL)
+						{
+							new_uop.write_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+					
+						}
+					}
+				}
+				// ****************************************************
+
 				statusInsert = this->decodeBuffer.push_back(new_uop);
 
 #if DECODE_DEBUG
@@ -1347,6 +1384,34 @@ void processor_t::decode()
 				new_uop.updatePackageWait(DECODE_LATENCY);
 				new_uop.born_cycle = orcs_engine.get_global_cycle();
 				this->total_operations[new_uop.opcode_operation]++;
+
+				// ****************************************************
+				// SUPERSCALAR IN ORDER processor
+				if (SUPERSCALAR_IN_ORDER) {
+					if (uops_created == 1) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.read_regs[i] == POSITION_FAIL)
+						{
+							new_uop.read_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+
+						}
+					} else if (uops_created == num_uops) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.write_regs[i] == POSITION_FAIL)
+						{
+							new_uop.write_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+					
+						}
+					}
+				}
+				// ****************************************************
+
 				statusInsert = this->decodeBuffer.push_back(new_uop);
 
 #if DECODE_DEBUG
@@ -1380,6 +1445,33 @@ void processor_t::decode()
 				new_uop.updatePackageWait(DECODE_LATENCY);
 				new_uop.born_cycle = orcs_engine.get_global_cycle();
 				this->total_operations[new_uop.opcode_operation]++;
+				// ****************************************************
+				// SUPERSCALAR IN ORDER processor
+				if (SUPERSCALAR_IN_ORDER) {
+					if (uops_created == 1) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.read_regs[i] == POSITION_FAIL)
+						{
+							new_uop.read_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+
+						}
+					} else if (uops_created == num_uops) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.write_regs[i] == POSITION_FAIL)
+						{
+							new_uop.write_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+					
+						}
+					}
+				}
+				// ****************************************************
+
 				statusInsert = this->decodeBuffer.push_back(new_uop);
 
 #if DECODE_DEBUG
@@ -1429,6 +1521,34 @@ void processor_t::decode()
 				new_uop.updatePackageWait(DECODE_LATENCY);
 				new_uop.born_cycle = orcs_engine.get_global_cycle();
 				this->total_operations[new_uop.opcode_operation]++;
+
+				// ****************************************************
+				// SUPERSCALAR IN ORDER processor
+				if (SUPERSCALAR_IN_ORDER) {
+					if (uops_created == 1) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.read_regs[i] == POSITION_FAIL)
+						{
+							new_uop.read_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+
+						}
+					} else if (uops_created == num_uops) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.write_regs[i] == POSITION_FAIL)
+						{
+							new_uop.write_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+					
+						}
+					}
+				}
+				// ****************************************************
+
 				statusInsert = this->decodeBuffer.push_back(new_uop);
 
 #if DECODE_DEBUG
@@ -1499,6 +1619,34 @@ void processor_t::decode()
 			new_uop.updatePackageWait(DECODE_LATENCY);
 			new_uop.born_cycle = orcs_engine.get_global_cycle();
 			this->total_operations[new_uop.opcode_operation]++;
+
+			// ****************************************************
+			// SUPERSCALAR IN ORDER processor
+			if (SUPERSCALAR_IN_ORDER) {
+				if (uops_created == 1) {
+					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+					{
+					if (new_uop.read_regs[i] == POSITION_FAIL)
+					{
+						new_uop.read_regs[i] = UOPS_LINK_REGISTER;
+						break;
+					}
+
+					}
+				} else if (uops_created == num_uops) {
+					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+					{
+					if (new_uop.write_regs[i] == POSITION_FAIL)
+					{
+						new_uop.write_regs[i] = UOPS_LINK_REGISTER;
+						break;
+					}
+				
+					}
+				}
+			}
+			// ****************************************************
+
 			statusInsert = this->decodeBuffer.push_back(new_uop);
 
 
@@ -1552,6 +1700,33 @@ void processor_t::decode()
 			new_uop.updatePackageWait(DECODE_LATENCY);
 			new_uop.born_cycle = orcs_engine.get_global_cycle();
 			this->total_operations[new_uop.opcode_operation]++;
+			// ****************************************************
+			// SUPERSCALAR IN ORDER processor
+			if (SUPERSCALAR_IN_ORDER) {
+				if (uops_created == 1) {
+					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+					{
+					if (new_uop.read_regs[i] == POSITION_FAIL)
+					{
+						new_uop.read_regs[i] = UOPS_LINK_REGISTER;
+						break;
+					}
+
+					}
+				} else if (uops_created == num_uops) {
+					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+					{
+					if (new_uop.write_regs[i] == POSITION_FAIL)
+					{
+						new_uop.write_regs[i] = UOPS_LINK_REGISTER;
+						break;
+					}
+				
+					}
+				}
+			}
+			// ****************************************************
+
 			statusInsert = this->decodeBuffer.push_back(new_uop);
 
 
@@ -1603,6 +1778,33 @@ void processor_t::decode()
 			new_uop.updatePackageWait(DECODE_LATENCY);
 			new_uop.born_cycle = orcs_engine.get_global_cycle();
 			this->total_operations[new_uop.opcode_operation]++;
+			// ****************************************************
+			// SUPERSCALAR IN ORDER processor
+			if (SUPERSCALAR_IN_ORDER) {
+				if (uops_created == 1) {
+					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+					{
+					if (new_uop.read_regs[i] == POSITION_FAIL)
+					{
+						new_uop.read_regs[i] = UOPS_LINK_REGISTER;
+						break;
+					}
+
+					}
+				} else if (uops_created == num_uops) {
+					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+					{
+					if (new_uop.write_regs[i] == POSITION_FAIL)
+					{
+						new_uop.write_regs[i] = UOPS_LINK_REGISTER;
+						break;
+					}
+				
+					}
+				}
+			}
+			// ****************************************************
+
 			statusInsert = this->decodeBuffer.push_back(new_uop);
 
 			#if DECODE_DEBUG
@@ -1727,6 +1929,34 @@ void processor_t::decode()
 				new_uop.updatePackageWait(DECODE_LATENCY);
 				new_uop.born_cycle = orcs_engine.get_global_cycle();
 				this->total_operations[new_uop.uop_operation]++;
+
+				// ****************************************************
+				// SUPERSCALAR IN ORDER processor
+				if (SUPERSCALAR_IN_ORDER) {
+					if (uops_created == 1) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.read_regs[i] == POSITION_FAIL)
+						{
+							new_uop.read_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+
+						}
+					} else if (uops_created == num_uops) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.write_regs[i] == POSITION_FAIL)
+						{
+							new_uop.write_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+					
+						}
+					}
+				}
+				// ****************************************************
+
 				statusInsert = this->decodeBuffer.push_back(new_uop);
 
 				#if DECODE_DEBUG
@@ -1799,6 +2029,33 @@ void processor_t::decode()
 			new_uop.updatePackageWait(DECODE_LATENCY);
 			new_uop.born_cycle = orcs_engine.get_global_cycle();
 			this->total_operations[new_uop.opcode_operation]++;
+			// ****************************************************
+			// SUPERSCALAR IN ORDER processor
+			if (SUPERSCALAR_IN_ORDER) {
+				if (uops_created == 1) {
+					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+					{
+					if (new_uop.read_regs[i] == POSITION_FAIL)
+					{
+						new_uop.read_regs[i] = UOPS_LINK_REGISTER;
+						break;
+					}
+
+					}
+				} else if (uops_created == num_uops) {
+					for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+					{
+					if (new_uop.write_regs[i] == POSITION_FAIL)
+					{
+						new_uop.write_regs[i] = UOPS_LINK_REGISTER;
+						break;
+					}
+				
+					}
+				}
+			}
+			// ****************************************************
+
 			statusInsert = this->decodeBuffer.push_back(new_uop);
 
 
@@ -1863,6 +2120,33 @@ void processor_t::decode()
 				new_uop.updatePackageWait(DECODE_LATENCY);
 				new_uop.born_cycle = orcs_engine.get_global_cycle();
 				this->total_operations[new_uop.opcode_operation]++;
+				// ****************************************************
+				// SUPERSCALAR IN ORDER processor
+				if (SUPERSCALAR_IN_ORDER) {
+					if (uops_created == 1) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.read_regs[i] == POSITION_FAIL)
+						{
+							new_uop.read_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+
+						}
+					} else if (uops_created == num_uops) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.write_regs[i] == POSITION_FAIL)
+						{
+							new_uop.write_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+					
+						}
+					}
+				}
+				// ****************************************************
+
 				statusInsert = this->decodeBuffer.push_back(new_uop);
 
 
@@ -1935,6 +2219,33 @@ void processor_t::decode()
 				new_uop.updatePackageWait(DECODE_LATENCY);
 				new_uop.born_cycle = orcs_engine.get_global_cycle();
 				this->total_operations[new_uop.opcode_operation]++;
+				// ****************************************************
+				// SUPERSCALAR IN ORDER processor
+				if (SUPERSCALAR_IN_ORDER) {
+					if (uops_created == 1) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.read_regs[i] == POSITION_FAIL)
+						{
+							new_uop.read_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+
+						}
+					} else if (uops_created == num_uops) {
+						for (uint32_t i = 0; i < MAX_REGISTERS; i++)
+						{
+						if (new_uop.write_regs[i] == POSITION_FAIL)
+						{
+							new_uop.write_regs[i] = UOPS_LINK_REGISTER;
+							break;
+						}
+					
+						}
+					}
+				}
+				// ****************************************************
+
 				statusInsert = this->decodeBuffer.push_back(new_uop);
 
 

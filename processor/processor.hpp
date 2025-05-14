@@ -416,6 +416,7 @@ class processor_t {
         uint64_t wait_time;
 
 		bool IN_ORDER;
+		bool SUPERSCALAR_IN_ORDER;
 
 
 		INSTANTIATE_GET_SET(uint64_t,processor_id)
@@ -574,5 +575,6 @@ class processor_t {
 		
 		// ====================================================================
 		INSTANTIATE_GET_SET (bool, IN_ORDER)
+		INSTANTIATE_GET_SET(bool, SUPERSCALAR_IN_ORDER)
 
 };
