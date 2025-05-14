@@ -1282,6 +1282,8 @@ void processor_t::decode()
 		{
 			DEBUG_PRINTF(" * Not enough space inside the decodeBuffer, %u required\n", num_uops);
 			this->add_stall_full_DecodeBuffer();
+
+			ERROR_ASSERT_PRINTF (num_uops <= this->decodeBuffer.get_capacity(), "%u uops required for instruction %s (DECODE_BUFFER only have %u entries)\n", num_uops, instr->opcode_assembly, DECODE_BUFFER)
 			break;
 		}
 
