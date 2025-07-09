@@ -7,7 +7,7 @@ prefetcher_t::prefetcher_t(){
 
 prefetcher_t::~prefetcher_t()
 {
-    if(this->prefetcher!=NULL) delete &this->prefetcher;
+    if(this->prefetcher!=NULL) delete this->prefetcher;
     //dtor
 }
 void prefetcher_t::allocate(uint32_t NUMBER_OF_PROCESSORS){
@@ -23,31 +23,42 @@ void prefetcher_t::allocate(uint32_t NUMBER_OF_PROCESSORS){
         this->prefetcher->allocate(NUMBER_OF_PROCESSORS);
     //#endif  
     // List of cycle completation prefetchs. Allows control issue prefetchers
-    this->prefetch_waiting_complete.reserve(NUMBER_OF_PROCESSORS);
+    this->prefetched_lines.reserve(NUMBER_OF_PROCESSORS);
 }
 // ================================================================
-// @mobLine - references to index the prefetch
-// @*cache - cache to be instaled line prefetched
+// @mobLine - references to index the prefetch (algo como último acesso)
+// @*cache - cache to be instaled line prefetched (LLC provavelmente)
 // ================================================================
-void prefetcher_t::prefecht(memory_order_buffer_line_t *mob_line, cache_t *cache){
+void prefetcher_t::prefetch(memory_order_buffer_line_t *mob_line, cache_t *cache){
     
     // Dados da linha de cache onde o dado de prefetch será inserido.
-    uint32_t idx_padding, line_padding;
-
-    // Ciclo atual
-    uint64_t cycle = orcs_engine.get_global_cycle();
+    uint64_t idx_padding, line_padding;
 
     // ******************************
     // Remove um prefetch já completo
     // ******************************
 
-    if(
-       (this->prefetch_waiting_complete.size()!=0) /* Existe ao menos um prefetch */ &&
-       (this->prefetch_waiting_complete.front() <= cycle) /* Já completou o prefetch mais antigo */
-      ){
+    // ******************************
+    // Remove um prefetch já completo
+    // ******************************
+
+    if ((this->prefetched_lines.size() != 0) && 
+        (this->prefetched_lines.front()->readyAt <= orcs_engine.get_global_cycle()) &&
+        (this->prefetched_lines.front()->status == PACKAGE_STATE_WAIT))
+    {
+        /* Insere na cache recebida */
+        line_t *linha = cache->installLine(this->prefetched_lines.at(0), cache->latency, idx_padding, line_padding);
+        
+        /* Marca como prefetched */
+        linha->prefetched=1;
+        
         /* Remove esse mais antigo que já está completo */
-        this->prefetch_waiting_complete.erase(this->prefetch_waiting_complete.begin());
+        delete this->prefetched_lines.at(0);
+        this->prefetched_lines.erase(this->prefetched_lines.begin());
+
     }
+
+
 
     // ****************************************
     // Com base no acesso à memória atual,
@@ -58,9 +69,10 @@ void prefetcher_t::prefecht(memory_order_buffer_line_t *mob_line, cache_t *cache
     // *****************************************************************
     // Impede que sejam feitas mais requisições de prefetch que o limite
     // *****************************************************************
-    if(this->prefetch_waiting_complete.size()>= PARALLEL_PREFETCH){
-        return;
+    if (this->prefetched_lines.size() >= PARALLEL_PREFETCH) {
+      return;
     }
+
 
     // ******************
     // Realiza o prefetch
@@ -76,39 +88,35 @@ void prefetcher_t::prefecht(memory_order_buffer_line_t *mob_line, cache_t *cache
             // Processo de prefetch
             // ********************
             this->add_totalPrefetched(); // Counter
+           
+            // Cria uma nova entrada para controle do prefetch
+            memory_package_t *pk = new memory_package_t();
+            this->prefetched_lines.push_back(pk);
 
-            // ##################################################
-            // Problema com o código:
-            //  As requisições à DRAM costumavam apresentar uma 
-            //  latência fixa.
-            //  Hoje, essa latência varia e só sabemos qual é ela
-            //  após o pacote ser finalizado.
+            // Preeche com dados do prefetch
+            pk->opcode_address = 0x0;
+            pk->memory_address = newAddress;
+            pk->memory_size = mob_line->memory_size;
+            pk->memory_operation = mob_line->memory_operation;
+            pk->status = PACKAGE_STATE_UNTREATED;
+            pk->is_hive = false;
+            pk->is_vima = false;
+            pk->hive_read1 = mob_line->hive_read1;
+            pk->hive_read2 = mob_line->hive_read2;
+            pk->hive_write = mob_line->hive_write;
+            pk->readyAt = orcs_engine.get_global_cycle();
+            pk->born_cycle = orcs_engine.get_global_cycle();
+            pk->sent_to_ram = false;
+            pk->type = DATA;
+            pk->uop_number = 0;
+            pk->processor_id = 0;
+            pk->op_count[pk->memory_operation]++;
+            pk->clients.shrink_to_fit();
 
-            //  Alteração necessária: 
-            //    Aguardar pacote da DRAM para contabilizar tempo
-            //    do prefetch.
-            //    Aguardar pacote da DRAM para inserir na cache.
-
-
-            // ##################################################
-            
-
-
-            // Faz requisição à DRAM
-            memory_package_t *prefetch_package = ...;
-            orcs_engine.memory_controller->requestDRAM(NULL, newAddress);
-
-            // Informa ao memory controller sobre o pedido de prefetch
+            // Faz a requisição para a DRAM
             orcs_engine.memory_controller->add_requests_prefetcher();
+            orcs_engine.memory_controller->requestDRAM(pk);
 
-            // Adiciona a nova linha na cache
-            line_t *linha = cache->installLine(newAddress, latency_prefetch, NULL, idx_padding, line_padding);
-            
-            // Marca como obtida pelo prefetch
-            linha->prefetched=1;
-
-            // Armazena quando o prefetch ficou completo, para poder lançar os próximos.
-            this->prefetch_waiting_complete.push_back(cycle+latency_prefetch);
         }
     }
 }

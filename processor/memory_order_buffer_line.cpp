@@ -12,6 +12,37 @@ memory_order_buffer_line_t::~memory_order_buffer_line_t() {
     //utils_t::template_delete_array<memory_order_buffer_line_t*>(mem_deps_ptr_array);
 }
 
+// ============================================================================
+void memory_order_buffer_line_t::copy_partial(memory_order_buffer_line_t *other) {
+        this->opcode_address= other->opcode_address;
+        this->memory_address= other->memory_address;
+        this->memory_size= other->memory_size;
+        this->is_hive = other->is_hive;
+        this->hive_read1 = other->hive_read1;
+        this->hive_read2 = other->hive_read2;
+        this->hive_write = other->hive_write;
+        this->is_vima = other->is_vima;
+        this->rob_ptr= other->rob_ptr;
+        this->uop_executed= other->uop_executed;
+        this->uop_number = other->uop_number;
+        this->readyAt = other->readyAt;
+        this->status = other->status;
+        this->memory_operation = other->memory_operation;
+        this->readyToGo = other->readyToGo;
+        this->cycle_send_request = other->cycle_send_request;
+        this->wait_mem_deps_number = other->wait_mem_deps_number;
+        //control variables
+        this->processed = false;
+        this->sent=false;
+        this->forwarded_data=false;
+        this->waiting_DRAM=false;
+        this->core_generate_miss=false;
+        this->processor_id = 0;
+        this->cycle_sent_to_DRAM = orcs_engine.get_global_cycle();
+        this->is_first_of_vector_load = false;
+}
+
+// ============================================================================
 
 // ============================================================================
 void memory_order_buffer_line_t::package_clean() {

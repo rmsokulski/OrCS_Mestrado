@@ -16,7 +16,7 @@ class prefetcher_t{
         prefetcher_t();
         ~prefetcher_t();
         //Aux objects
-        std::vector<uint64_t> prefetch_waiting_complete;
+        std::vector<memory_package_t *> prefetched_lines;
         //Object prefetcher
         // methods statistics
         INSTANTIATE_GET_SET_ADD(uint32_t,totalPrefetched)
@@ -28,6 +28,6 @@ class prefetcher_t{
         void allocate(uint32_t NUMBER_OF_PROCESSORS);
         void statistics(FILE *output);
         void reset_statistics();
-        void prefecht(memory_order_buffer_line_t *mob_line,cache_t *cache);//endereco cache alvo
+        void prefetch(memory_order_buffer_line_t *mob_line,cache_t *cache);//endereco cache alvo
 };
 #endif

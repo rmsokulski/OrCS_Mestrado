@@ -510,7 +510,7 @@ void cache_manager_t::install (memory_package_t* request){
             this->installCacheLines(request, cache_indexes, 0, DATA);
 
             // -----------------------------------------------------------------------------------------
-            // Propaga a escrita para todos os níveis de cache
+            // Propaga a escrita para todos os níveis de cache (WB escreve no primeiro só)
             // -----------------------------------------------------------------------------------------
             int cache_level = DATA_LEVELS - 1;
             for (int32_t k = cache_level - 1; k >= 0; k--) {

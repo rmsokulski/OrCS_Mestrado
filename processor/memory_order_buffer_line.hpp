@@ -43,6 +43,8 @@ class memory_order_buffer_line_t : public memory_request_client_t {
 
         void package_clean();
         std::string content_to_string();
+        void copy_partial(memory_order_buffer_line_t *other);
+
         //select packages
         static int32_t find_free(memory_order_buffer_line_t *input_array, uint32_t size_array);
         static int32_t find_old_request_state_ready(memory_order_buffer_line_t *input_array, uint32_t size_array, package_state_t state);
