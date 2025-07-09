@@ -13,7 +13,7 @@ prefetcher_t::~prefetcher_t()
 void prefetcher_t::allocate(uint32_t NUMBER_OF_PROCESSORS){
     // libconfig::Setting* cfg_root = orcs_engine.configuration->getConfig();
     // set_PARALLEL_PREFETCH (cfg_root[0]["NUMBER_OF_PROCESSORS"]);
-
+    this->set_totalPrefetched(0);
     this->set_latePrefetches(0);
     this->set_usefulPrefetches(0);
     this->set_latePrefetches(0);
