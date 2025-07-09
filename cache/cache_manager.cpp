@@ -619,10 +619,14 @@ void cache_manager_t::process (memory_package_t* request, int32_t* cache_indexes
                 #if MEMORY_DEBUG 
                     ORCS_PRINTF (" sent to RAM.\n")
                 #endif
-                
-
+            
                 orcs_engine.memory_controller->add_requests_llc();
                 orcs_engine.memory_controller->requestDRAM (request);
+
+                // Prefetch para a LLC de dados
+                if ((request->clients.size() > 0) && (request->type == DATA)){
+                    this->prefetcher->prefetch((memory_order_buffer_line_t *)  request->clients.at(0), &this->data_cache[DATA_LEVELS-1][cache_indexes[DATA_LEVELS-1]]);
+                }
 
                 // Check if its the first load request from RVV
                 // // The read check is necessary because writes do not have clients
