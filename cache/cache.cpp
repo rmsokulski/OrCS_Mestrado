@@ -227,7 +227,7 @@ inline void cache_t::writeBack(line_t *line, uint32_t processor_id, uint64_t mem
         ERROR_ASSERT_PRINTF(line->line_ptr_caches[processor_id][i] != NULL, "Error, no line reference in next levels.")
     }
 	// L1 writeBack issues
-	if (this->level == 0) {
+	if ((this->level == 0) && (this->level != DATA_LEVELS - 1)) {
 		for (uint32_t i = 1; i < DATA_LEVELS; i++) {
 			this->copyNextLevels(line, i, processor_id);
 			line->line_ptr_caches[processor_id][i]->line_ptr_caches[processor_id][this->level] = NULL;//Pointer to Lower Level
