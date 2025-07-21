@@ -2392,6 +2392,8 @@ void processor_t::rename()
 			if (this->memory_order_buffer_read_used >= MOB_READ || reorderBuffer.robUsed >= ROB_SIZE)
 			{
 				DEBUG_PRINTF(" * READ MOB || ROB full\n")
+				if (this->memory_order_buffer_read_used >= MOB_READ) this->add_stall_full_MOB_Read();
+				if (reorderBuffer.robUsed >= ROB_SIZE) this->add_stall_full_ROB();
 				break;
 			}
 
@@ -2417,8 +2419,11 @@ void processor_t::rename()
 		{
 			if (this->memory_order_buffer_write_used >= MOB_WRITE || reorderBuffer.robUsed >= ROB_SIZE)
 			{
+				if (this->memory_order_buffer_write_used >= MOB_WRITE) this->add_stall_full_MOB_Write();
+				if (reorderBuffer.robUsed >= ROB_SIZE) this->add_stall_full_ROB();
 				break;
 			}
+			
 			// Retorna a primeira posição de um conjunto de n livres, ou POSITION_FAIL
 			pos_mob = this->search_n_positions_mob_write(this->decodeBuffer.front()->num_mem_operations, &MOB_LIMIT);
 			if (pos_mob == POSITION_FAIL)
@@ -4034,6 +4039,8 @@ void processor_t::statistics(FILE *output)
 		fprintf(output, "Stalls Fetch:          %lu\n", this->get_stall_full_FetchBuffer());
 		fprintf(output, "Stalls Decode:          %lu\n", this->get_stall_full_DecodeBuffer());
 		fprintf(output, "Stalls Rename:          %lu\n", this->get_stall_full_ROB());
+		fprintf(output, "Stalls Full MOB Read:          %lu\n", this->get_stall_full_MOB_Read());
+		fprintf(output, "Stalls Full MOB Write:          %lu\n", this->get_stall_full_MOB_Write());
 		utils_t::largestSeparator(output);
 		fprintf(output, "Dependencies created:          %lu\n", dependencies_created);
 		fprintf(output, "Calls for dependencies creation:          %lu\n", calls_for_dependencies_creation);
