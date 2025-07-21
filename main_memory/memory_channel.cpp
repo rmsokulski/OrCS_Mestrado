@@ -460,7 +460,7 @@ void memory_channel_t::clock(){
             }
             else {
                 uint32_t next_row = get_row(next_entry->memory_address);
-                next_entry->row_buffer = true;
+                //next_entry->row_buffer = true;
                 // If next package == row buffer miss --->>> RowPrecharge
                 if (this->bank_last_row[bank] != next_row) {
                     uint64_t latency_ready_cycle = get_minimum_latency(bank, MEMORY_CONTROLLER_COMMAND_ROW_ACCESS);
@@ -471,12 +471,14 @@ void memory_channel_t::clock(){
                     #if MEMORY_DEBUG 
                         ORCS_PRINTF ("[DRAM] %lu %lu %s row buffer MISS! (Latency min: %lu)\n", orcs_engine.get_global_cycle(), current_entry->memory_address, get_enum_memory_operation_char (current_entry->memory_operation), latency_ready_cycle)
                     #endif
-                    this->add_stat_row_buffer_miss();
+                    // This is set on the precharge and ACCESS/READ/WRITE state
+                    // this->add_stat_row_buffer_miss();
                 } else {
                     #if MEMORY_DEBUG
                         ORCS_PRINTF ("[DRAM] %lu %lu %s row buffer HIT!\n", orcs_engine.get_global_cycle(), current_entry->memory_address, get_enum_memory_operation_char (current_entry->memory_operation))
                     #endif
-                    this->add_stat_row_buffer_hit();
+                    // This is set on the precharge and ACCESS/READ/WRITE state
+                    // this->add_stat_row_buffer_hit();
                 }
             }
         }
