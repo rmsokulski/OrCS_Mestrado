@@ -34,6 +34,8 @@ class memory_controller_t{
         uint64_t row_bits_shift;
         uint64_t controller_bits_shift;
 
+
+        std::vector<memory_package_t*> ongoing_requests;
         std::vector<memory_package_t*> working;
 
         uint64_t latency_burst;

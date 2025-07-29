@@ -42,6 +42,9 @@ memory_package_t::memory_package_t() {
     sent_to_cache_level_at = new uint32_t[END]();
     this->latency = 0;
 
+    this->subrequest_from = 0x0;
+    this->num_subrequests = 0;
+
     memory_operation = MEMORY_OPERATION_LAST;    /// memory operation
 }
 
@@ -211,6 +214,9 @@ void memory_package_t::package_clean() {
 
     this->latency = 0;
 
+    this->subrequest_from = 0x0;
+    this->num_subrequests = 0;
+
     memory_operation = MEMORY_OPERATION_LAST;    /// memory operation
 }
 
@@ -257,6 +263,9 @@ void memory_package_t::copy(memory_package_t *other) {
     this->latency    = other->latency;
 
     memory_operation = other->memory_operation;    /// memory operation
+
+    this->subrequest_from = other->subrequest_from;
+    this->num_subrequests = other->num_subrequests;
 
     // this->free = other->free;
 }

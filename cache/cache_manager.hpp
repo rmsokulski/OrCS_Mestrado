@@ -51,8 +51,10 @@ class cache_manager_t {
         // Prefetch MOB entries
         uint32_t MOB_SIMULATED_VECTOR_LOAD_ENTRIES;
 
+        std::vector<memory_package_t*> ongoing_requests;
         std::vector<memory_package_t*> requests;
         std::vector<memory_package_t *> requests_prefetch;
+
 
         // Conjunto de pacotes disponíveis para prefetch
         memory_package_t *request_memory_packages;

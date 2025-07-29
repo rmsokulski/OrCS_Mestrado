@@ -229,11 +229,31 @@ void memory_controller_t::clock(){
             if (wait_time < this->min_wait_operations[working[i]->memory_operation]) this->min_wait_operations[working[i]->memory_operation] = wait_time;
             if (wait_time > this->max_wait_operations[working[i]->memory_operation]) this->max_wait_operations[working[i]->memory_operation] = wait_time;
             this->total_latency[working[i]->memory_operation] += wait_time;
+            
             // -----------------------------------------------------------------------------------------
-            // Remove da lista de requisições
+            // Atualiza a requisição original
             // -----------------------------------------------------------------------------------------
+            printf("memory_controller_t - requestDRAM - Completing sub-request [Addr: %lu - Size: %u]\n", working[i]->memory_address, working[i]->memory_size);    
+            printf("memory_controller_t - requestDRAM - Updating original request [Addr: %lu - Size: %u - Num. Subrequests: %u -> %u]\n", working[i]->subrequest_from->memory_address, working[i]->subrequest_from->memory_size, working[i]->subrequest_from->num_subrequests, working[i]->subrequest_from->num_subrequests - 1);
+            
+            working[i]->subrequest_from->num_subrequests--;
+
+            if (working[i]->subrequest_from->num_subrequests == 0) {
+                working[i]->subrequest_from->updatePackageWait (1);
+
+                printf("memory_controller_t - requestDRAM - Completing original request [Addr: %lu - Size: %u]\n", working[i]->subrequest_from->memory_address, working[i]->subrequest_from->memory_size);
+                ongoing_requests.erase(std::remove(ongoing_requests.begin(), ongoing_requests.end(), working[i]->subrequest_from), ongoing_requests.end());
+                ongoing_requests.shrink_to_fit();
+            }
+
+            
+            // -----------------------------------------------------------------------------------------
+            // Libera a subrequisição e remove da lista de requisições
+            // -----------------------------------------------------------------------------------------
+            delete working[i];
             working.erase(std::remove(working.begin(), working.end(), working[i]), working.end());
             working.shrink_to_fit();
+
         }
     }
 }
@@ -294,8 +314,44 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
         if (request->is_vima) this->add_requests_vima();
         request->sent_to_ram = true;
         
-        this->working.push_back (request);
-        this->working.shrink_to_fit();
+        printf("memory_controller_t - requestDRAM - Recieving request [Addr: %lu - Size: %u]\n", request->memory_address, request->memory_size);
+        
+        ongoing_requests.push_back(request);
+
+
+        // *********************************************************************
+        // Get the first row buffer address to be loaded
+        // *********************************************************************
+        uint64_t base_address = request->memory_address  & (~(BANK_ROW_BUFFER_SIZE-1));
+        
+        // *********************************************************************
+        // Get the number of bytes to be loaded
+        // *********************************************************************
+        uint64_t loaded_bytes = request->memory_size + (request->memory_address & (BANK_ROW_BUFFER_SIZE - 1));
+        
+        // *********************************************************************
+        // Generate the new sub-requests
+        // *********************************************************************
+        uint32_t num_subrequests = ceil((loaded_bytes + 0.0f) / BANK_ROW_BUFFER_SIZE);
+
+        for (uint32_t i=0; i < num_subrequests; ++i) {
+            memory_package_t *subrequest = new memory_package_t();
+            subrequest->copy(request);
+            subrequest->subrequest_from = request;
+            subrequest->num_subrequests = 0;
+            request->num_subrequests++;
+
+            subrequest->memory_address = base_address;
+            subrequest->memory_size = BANK_ROW_BUFFER_SIZE;
+            base_address += BANK_ROW_BUFFER_SIZE; // For the next subrequest
+
+
+            printf("memory_controller_t - requestDRAM - Generating sub-request [Addr: %lu - Size: %u]\n", subrequest->memory_address, subrequest->memory_size);
+            
+            this->working.push_back (subrequest);
+            this->working.shrink_to_fit();
+        }
+
         #if DEBUG
             ORCS_PRINTF ("Memory Controller requestDRAM(): receiving memory request from uop %lu, %s.\n", request->uop_number, get_enum_memory_operation_char (request->memory_operation))
         #endif
