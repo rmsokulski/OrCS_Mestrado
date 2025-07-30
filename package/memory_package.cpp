@@ -167,7 +167,10 @@ void memory_package_t::printPackage(){
 }
 
 void memory_package_t::updateClients(){
+    #if MEMORY_REQUESTS_DEBUG
     printf("memory_package_t - updateClients - Updating clients from request [Addr: %lu - Size: %u]\n", this->memory_address, this->memory_size);
+    #endif
+    
     for (size_t i = 0; i < clients.size(); i++) {
         clients[i]->updatePackageReady (0);
     }

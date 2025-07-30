@@ -64,7 +64,7 @@ memory_controller_t::~memory_controller_t(){
 // ============================================================================
 
 // ============================================================================
-// @allocate objects to EMC
+// @allocate objects to#if MEMORY_REQUESTS_DEBUG EMC
 void memory_controller_t::allocate(){
     libconfig::Setting &cfg_root = orcs_engine.configuration->getConfig();
     libconfig::Setting &cfg_memory_ctrl = cfg_root["MEMORY_CONTROLLER"];
@@ -83,16 +83,17 @@ void memory_controller_t::allocate(){
     set_WAIT_CYCLE (cfg_memory_ctrl["WAIT_CYCLE"]);
     set_CORE_TO_BUS_CLOCK_RATIO (cfg_memory_ctrl["CORE_TO_BUS_CLOCK_RATIO"]);
 
-    if ((int32_t)cfg_memory_ctrl["LATENCY_BURST_REDUCTION_FACTOR"] < 0) {
-        set_latency_burst (ceil ((min(LINE_SIZE, BANK_ROW_BUFFER_SIZE)/BURST_WIDTH) * this->CORE_TO_BUS_CLOCK_RATIO));
-        set_cache_line_latency_burst (ceil ((LINE_SIZE/BURST_WIDTH) * this->CORE_TO_BUS_CLOCK_RATIO));
+    set_latency_burst (ceil ((min(LINE_SIZE, BANK_ROW_BUFFER_SIZE)/BURST_WIDTH) * this->CORE_TO_BUS_CLOCK_RATIO));
 
+    if ((int32_t)cfg_memory_ctrl["LATENCY_BURST_REDUCTION_FACTOR"] < 0) {
+        set_cache_line_latency_burst (ceil ((LINE_SIZE/BURST_WIDTH) * this->CORE_TO_BUS_CLOCK_RATIO));
     } else if ((int32_t)cfg_memory_ctrl["LATENCY_BURST_REDUCTION_FACTOR"] == 0) {
-        set_latency_burst (0);
+        set_cache_line_latency_burst (0);
     } else {
-        set_latency_burst (ceil ((LINE_SIZE/BURST_WIDTH) * this->CORE_TO_BUS_CLOCK_RATIO / 
+        set_cache_line_latency_burst (ceil ((LINE_SIZE/BURST_WIDTH) * this->CORE_TO_BUS_CLOCK_RATIO / 
                                  ((int32_t)cfg_memory_ctrl["LATENCY_BURST_REDUCTION_FACTOR"] + 0.0)));
     }
+
     printf("MEMORY_CONTROLLER_T::set_latency_burst = %lu\n", this->latency_burst);
     this->total_latency = new uint64_t [MEMORY_OPERATION_LAST]();
     this->total_operations = new uint64_t [MEMORY_OPERATION_LAST]();
@@ -241,15 +242,19 @@ void memory_controller_t::clock(){
             // -----------------------------------------------------------------------------------------
             // Atualiza a requisição original
             // -----------------------------------------------------------------------------------------
+            #if MEMORY_REQUESTS_DEBUG
             printf("memory_controller_t - requestDRAM - Completing sub-request [Addr: %lu - Size: %u]\n", working[i]->memory_address, working[i]->memory_size);    
             printf("memory_controller_t - requestDRAM - Updating original request [Addr: %lu - Size: %u - Num. Subrequests: %u -> %u]\n", working[i]->subrequest_from[0]->memory_address, working[i]->subrequest_from[0]->memory_size, working[i]->subrequest_from[0]->num_subrequests, working[i]->subrequest_from[0]->num_subrequests - 1);
-            
+            #endif
+
             working[i]->subrequest_from[0]->num_subrequests--;
 
             if (working[i]->subrequest_from[0]->num_subrequests == 0) {
                 working[i]->subrequest_from[0]->updatePackageWait (this->cache_line_latency_burst);
 
+                #if MEMORY_REQUESTS_DEBUG
                 printf("memory_controller_t - requestDRAM - Completing original request [Addr: %lu - Size: %u]\n", working[i]->subrequest_from[0]->memory_address, working[i]->subrequest_from[0]->memory_size);
+                #endif
                 ongoing_requests.erase(std::remove(ongoing_requests.begin(), ongoing_requests.end(), working[i]->subrequest_from[0]), ongoing_requests.end());
                 ongoing_requests.shrink_to_fit();
             }
@@ -322,8 +327,10 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
         if (request->is_vima) this->add_requests_vima();
         request->sent_to_ram = true;
         
+        #if MEMORY_REQUESTS_DEBUG
         printf("memory_controller_t - requestDRAM - Receiving request [Addr: %lu - Size: %u]\n", request->memory_address, request->memory_size);
-        
+        #endif
+
         ongoing_requests.push_back(request);
 
 
@@ -353,9 +360,10 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
             subrequest->memory_size = BANK_ROW_BUFFER_SIZE;
             base_address += BANK_ROW_BUFFER_SIZE; // For the next subrequest
 
-
+            #if MEMORY_REQUESTS_DEBUG
             printf("memory_controller_t - requestDRAM - Generating sub-request [Addr: %lu - Size: %u]\n", subrequest->memory_address, subrequest->memory_size);
-            
+            #endif
+
             this->working.push_back (subrequest);
             this->working.shrink_to_fit();
         }

@@ -31,6 +31,7 @@
 #define VIMA_DEBUG 0
 #define DV_DEBUG 0
 #define UNIMPLEMENTED_ALERTS 0
+#define MEMORY_REQUESTS_DEBUG 1
 
 // ========================
 // Defines Simulators Caracteristics

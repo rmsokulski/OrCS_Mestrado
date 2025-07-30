@@ -359,7 +359,10 @@ bool cache_manager_t::isIn (memory_package_t* subrequest, memory_package_t* requ
                 ORCS_PRINTF ("will be forwarded by %lu %s.\n", requests[i]->memory_address, get_enum_memory_operation_char (requests[i]->memory_operation))
             #endif
 
+            #if MEMORY_REQUESTS_DEBUG
             printf("cacheManager - isIn - Using existent sub-request [Addr: %lu - Size: %u]\n", requests[i]->memory_address, requests[i]->memory_size);
+            #endif
+
             requests[i]->subrequest_from.push_back(request);
             request->num_subrequests++;
             // << Do not change the number of subrequests from the existent request >>
@@ -475,9 +478,13 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
     }
     //if (request->is_vima) ORCS_PRINTF ("%lu Cache Manager finishRequest(): VIMA INSTRUCTION READY!\n", orcs_engine.get_global_cycle())
 
+    #if MEMORY_REQUESTS_DEBUG
     printf("cacheManager - finishRequest - Completing sub-request [Addr: %lu - Size: %u]\n", request->memory_address, request->memory_size);    
+    #endif
     for (uint32_t i=0; i < request->subrequest_from.size(); ++i) {
+        #if MEMORY_REQUESTS_DEBUG
         printf("cacheManager - finishRequest - Updating original request [Addr: %lu - Size: %u - Num. Subrequests: %u -> %u]\n", request->subrequest_from[i]->memory_address, request->subrequest_from[i]->memory_size, request->subrequest_from[i]->num_subrequests, request->subrequest_from[i]->num_subrequests - 1);
+        #endif
         // Update original request
         request->subrequest_from[i]->num_subrequests--;
 
@@ -485,7 +492,9 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
         if (request->subrequest_from[i]->num_subrequests == 0) {
             request->subrequest_from[i]->updatePackageReady();
             request->subrequest_from[i]->updateClients();
+            #if MEMORY_REQUESTS_DEBUG
             printf("cacheManager - finishRequest - Completing original request [Addr: %lu - Size: %u]\n", request->subrequest_from[i]->memory_address, request->subrequest_from[i]->memory_size);
+            #endif
             ongoing_requests.erase(std::remove (ongoing_requests.begin(), ongoing_requests.end(), request->subrequest_from[i]), ongoing_requests.end());
             ongoing_requests.shrink_to_fit();
 
@@ -577,8 +586,10 @@ bool cache_manager_t::searchData(memory_package_t *request) {
     if (mem_t == MEMORY_OPERATION_READ) this->add_reads();
     else if (mem_t == MEMORY_OPERATION_WRITE) this->add_writes();
 
+    #if MEMORY_REQUESTS_DEBUG
     printf("cacheManager - searchData - Receiving request [Addr: %lu - Size: %u - Instruction: %lu]\n", request->memory_address, request->memory_size, request->uop_number);
-    
+    #endif
+
     /// %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     // NEW
     /// %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -614,7 +625,10 @@ bool cache_manager_t::searchData(memory_package_t *request) {
             subrequest->num_subrequests = 0;
             request->num_subrequests++;
 
+            #if MEMORY_REQUESTS_DEBUG
             printf("cacheManager - searchData - Generating sub-request [Addr: %lu - Size: %u]\n", subrequest->memory_address, subrequest->memory_size);
+            #endif
+            
             requests.push_back (subrequest);
             requests.shrink_to_fit();
 
