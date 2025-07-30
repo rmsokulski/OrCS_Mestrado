@@ -73,7 +73,7 @@ class cache_manager_t {
         void get_cache_info(cacheId_t cache_type, libconfig::Setting &cfg_cache_defs, cache_t *cache, uint32_t cache_level, uint32_t CACHE_AMOUNT);
         void check_cache(uint32_t cache_size, uint32_t cache_level);
         void print_requests();
-        bool isIn (memory_package_t* mob_line);
+        bool isIn (memory_package_t* subrequest, memory_package_t* request);
         void installCacheLines(memory_package_t* request, int32_t *cache_indexes, uint32_t latency_request, cacheId_t cache_type);
         uint32_t searchAddress(uint64_t instructionAddress, cache_t *cache, uint32_t *latency_request, uint32_t *ttc);
         cache_status_t recursiveInstructionSearch(memory_package_t *mob_line, int32_t *cache_indexes, uint32_t latency_request, uint32_t ttc, uint32_t cache_level);

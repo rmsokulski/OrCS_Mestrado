@@ -42,7 +42,7 @@ memory_package_t::memory_package_t() {
     sent_to_cache_level_at = new uint32_t[END]();
     this->latency = 0;
 
-    this->subrequest_from = 0x0;
+    this->subrequest_from = std::vector<memory_package_t*>();
     this->num_subrequests = 0;
 
     memory_operation = MEMORY_OPERATION_LAST;    /// memory operation
@@ -167,6 +167,7 @@ void memory_package_t::printPackage(){
 }
 
 void memory_package_t::updateClients(){
+    printf("memory_package_t - updateClients - Updating clients from request [Addr: %lu - Size: %u]\n", this->memory_address, this->memory_size);
     for (size_t i = 0; i < clients.size(); i++) {
         clients[i]->updatePackageReady (0);
     }
@@ -214,7 +215,7 @@ void memory_package_t::package_clean() {
 
     this->latency = 0;
 
-    this->subrequest_from = 0x0;
+    this->subrequest_from = std::vector<memory_package_t*>();
     this->num_subrequests = 0;
 
     memory_operation = MEMORY_OPERATION_LAST;    /// memory operation
@@ -264,8 +265,9 @@ void memory_package_t::copy(memory_package_t *other) {
 
     memory_operation = other->memory_operation;    /// memory operation
 
-    this->subrequest_from = other->subrequest_from;
-    this->num_subrequests = other->num_subrequests;
+    // This must not be copied!
+    // this->subrequest_from = std::vector<memory_package_t*>();
+    // this->num_subrequests = other->num_subrequests;
 
     // this->free = other->free;
 }

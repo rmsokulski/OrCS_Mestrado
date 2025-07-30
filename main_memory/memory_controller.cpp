@@ -242,15 +242,15 @@ void memory_controller_t::clock(){
             // Atualiza a requisição original
             // -----------------------------------------------------------------------------------------
             printf("memory_controller_t - requestDRAM - Completing sub-request [Addr: %lu - Size: %u]\n", working[i]->memory_address, working[i]->memory_size);    
-            printf("memory_controller_t - requestDRAM - Updating original request [Addr: %lu - Size: %u - Num. Subrequests: %u -> %u]\n", working[i]->subrequest_from->memory_address, working[i]->subrequest_from->memory_size, working[i]->subrequest_from->num_subrequests, working[i]->subrequest_from->num_subrequests - 1);
+            printf("memory_controller_t - requestDRAM - Updating original request [Addr: %lu - Size: %u - Num. Subrequests: %u -> %u]\n", working[i]->subrequest_from[0]->memory_address, working[i]->subrequest_from[0]->memory_size, working[i]->subrequest_from[0]->num_subrequests, working[i]->subrequest_from[0]->num_subrequests - 1);
             
-            working[i]->subrequest_from->num_subrequests--;
+            working[i]->subrequest_from[0]->num_subrequests--;
 
-            if (working[i]->subrequest_from->num_subrequests == 0) {
-                working[i]->subrequest_from->updatePackageWait (this->cache_line_latency_burst);
+            if (working[i]->subrequest_from[0]->num_subrequests == 0) {
+                working[i]->subrequest_from[0]->updatePackageWait (this->cache_line_latency_burst);
 
-                printf("memory_controller_t - requestDRAM - Completing original request [Addr: %lu - Size: %u]\n", working[i]->subrequest_from->memory_address, working[i]->subrequest_from->memory_size);
-                ongoing_requests.erase(std::remove(ongoing_requests.begin(), ongoing_requests.end(), working[i]->subrequest_from), ongoing_requests.end());
+                printf("memory_controller_t - requestDRAM - Completing original request [Addr: %lu - Size: %u]\n", working[i]->subrequest_from[0]->memory_address, working[i]->subrequest_from[0]->memory_size);
+                ongoing_requests.erase(std::remove(ongoing_requests.begin(), ongoing_requests.end(), working[i]->subrequest_from[0]), ongoing_requests.end());
                 ongoing_requests.shrink_to_fit();
             }
 
@@ -345,7 +345,7 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
         for (uint32_t i=0; i < num_subrequests; ++i) {
             memory_package_t *subrequest = new memory_package_t();
             subrequest->copy(request);
-            subrequest->subrequest_from = request;
+            subrequest->subrequest_from.push_back(request); // Only one [0]
             subrequest->num_subrequests = 0;
             request->num_subrequests++;
 
