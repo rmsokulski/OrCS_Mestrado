@@ -38,7 +38,8 @@ class memory_controller_t{
         std::vector<memory_package_t*> ongoing_requests;
         std::vector<memory_package_t*> working;
 
-        uint64_t latency_burst;
+        uint64_t latency_burst; // Time transfer min(cache_line_size, bank_row_buffer_size), used to control the bank internal temporizations
+        uint64_t cache_line_latency_burst; // Time to transfer the cache line data between DRAM and cache.
 
         uint64_t* total_latency;
         uint64_t* total_operations;
@@ -120,6 +121,8 @@ class memory_controller_t{
         INSTANTIATE_GET_SET_ADD(uint64_t,row_buffer_hit)
 
         INSTANTIATE_GET_SET_ADD(uint64_t,latency_burst)
+        INSTANTIATE_GET_SET_ADD(uint64_t,cache_line_latency_burst)
+        
         
         INSTANTIATE_GET_SET_ADD(uint32_t,LINE_SIZE)
         INSTANTIATE_GET_SET_ADD(uint32_t,BANK)

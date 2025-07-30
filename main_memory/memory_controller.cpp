@@ -68,17 +68,25 @@ memory_controller_t::~memory_controller_t(){
 void memory_controller_t::allocate(){
     libconfig::Setting &cfg_root = orcs_engine.configuration->getConfig();
     libconfig::Setting &cfg_memory_ctrl = cfg_root["MEMORY_CONTROLLER"];
+    libconfig::Setting &cfg_cache_defs = cfg_root["CACHE_MEMORY"];
     
+    if (cfg_memory_ctrl.exists("LINE_SIZE")) {
+        printf("WARNING: The cache line size should be only defined in the cache configuration. Check your configuration files!\n");
+        exit(1);
+    }
+
     set_BANK (cfg_memory_ctrl["BANK"]);
     set_BANK_ROW_BUFFER_SIZE (cfg_memory_ctrl["BANK_ROW_BUFFER_SIZE"]);
     set_CHANNEL (cfg_memory_ctrl["CHANNEL"]);
     set_BURST_WIDTH (cfg_memory_ctrl["BURST_WIDTH"]);
-    set_LINE_SIZE (cfg_memory_ctrl["LINE_SIZE"]);
+    set_LINE_SIZE (cfg_cache_defs["CONFIG"]["LINE_SIZE"]);
     set_WAIT_CYCLE (cfg_memory_ctrl["WAIT_CYCLE"]);
     set_CORE_TO_BUS_CLOCK_RATIO (cfg_memory_ctrl["CORE_TO_BUS_CLOCK_RATIO"]);
 
     if ((int32_t)cfg_memory_ctrl["LATENCY_BURST_REDUCTION_FACTOR"] < 0) {
-        set_latency_burst (ceil ((LINE_SIZE/BURST_WIDTH) * this->CORE_TO_BUS_CLOCK_RATIO));
+        set_latency_burst (ceil ((min(LINE_SIZE, BANK_ROW_BUFFER_SIZE)/BURST_WIDTH) * this->CORE_TO_BUS_CLOCK_RATIO));
+        set_cache_line_latency_burst (ceil ((LINE_SIZE/BURST_WIDTH) * this->CORE_TO_BUS_CLOCK_RATIO));
+
     } else if ((int32_t)cfg_memory_ctrl["LATENCY_BURST_REDUCTION_FACTOR"] == 0) {
         set_latency_burst (0);
     } else {
@@ -239,7 +247,7 @@ void memory_controller_t::clock(){
             working[i]->subrequest_from->num_subrequests--;
 
             if (working[i]->subrequest_from->num_subrequests == 0) {
-                working[i]->subrequest_from->updatePackageWait (1);
+                working[i]->subrequest_from->updatePackageWait (this->cache_line_latency_burst);
 
                 printf("memory_controller_t - requestDRAM - Completing original request [Addr: %lu - Size: %u]\n", working[i]->subrequest_from->memory_address, working[i]->subrequest_from->memory_size);
                 ongoing_requests.erase(std::remove(ongoing_requests.begin(), ongoing_requests.end(), working[i]->subrequest_from), ongoing_requests.end());
@@ -314,7 +322,7 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
         if (request->is_vima) this->add_requests_vima();
         request->sent_to_ram = true;
         
-        printf("memory_controller_t - requestDRAM - Recieving request [Addr: %lu - Size: %u]\n", request->memory_address, request->memory_size);
+        printf("memory_controller_t - requestDRAM - Receiving request [Addr: %lu - Size: %u]\n", request->memory_address, request->memory_size);
         
         ongoing_requests.push_back(request);
 
@@ -322,12 +330,12 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
         // *********************************************************************
         // Get the first row buffer address to be loaded
         // *********************************************************************
-        uint64_t base_address = request->memory_address  & (~(BANK_ROW_BUFFER_SIZE-1));
+        uint64_t base_address = request->memory_address  & (~(((uint64_t)BANK_ROW_BUFFER_SIZE)-1));
         
         // *********************************************************************
         // Get the number of bytes to be loaded
         // *********************************************************************
-        uint64_t loaded_bytes = request->memory_size + (request->memory_address & (BANK_ROW_BUFFER_SIZE - 1));
+        uint64_t loaded_bytes = request->memory_size + (request->memory_address & (((uint64_t)BANK_ROW_BUFFER_SIZE) - 1));
         
         // *********************************************************************
         // Generate the new sub-requests

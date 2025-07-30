@@ -70,11 +70,17 @@ memory_channel_t::~memory_channel_t(){
 void memory_channel_t::allocate() {
     libconfig::Setting &cfg_root = orcs_engine.configuration->getConfig();
     libconfig::Setting &cfg_memory_ctrl = cfg_root["MEMORY_CONTROLLER"];
+    libconfig::Setting &cfg_cache_defs = cfg_root["CACHE_MEMORY"];
     
+    if (cfg_memory_ctrl.exists("LINE_SIZE")) {
+        printf("WARNING: The cache line size should be only defined in the cache configuration. Check your configuration files!\n");
+        exit(1);
+    }
+
     set_RANK (cfg_memory_ctrl["RANK"]);
     set_BANK (cfg_memory_ctrl["BANK"]);
     set_BANK_BUFFER_SIZE (cfg_memory_ctrl["BANK_BUFFER_SIZE"]);
-    set_LINE_SIZE (cfg_memory_ctrl["LINE_SIZE"]);
+    set_LINE_SIZE (cfg_cache_defs["CONFIG"]["LINE_SIZE"]);
     set_BANK_ROW_BUFFER_SIZE (cfg_memory_ctrl["BANK_ROW_BUFFER_SIZE"]);
     set_CHANNEL (cfg_memory_ctrl["CHANNEL"]);
     set_CLOSED_ROW (cfg_memory_ctrl["CLOSED_ROW"]);
@@ -427,7 +433,7 @@ void memory_channel_t::clock(){
                 this->bank_last_command[bank] = MEMORY_CONTROLLER_COMMAND_COLUMN_READ;
                 this->bank_last_command_cycle[bank][MEMORY_CONTROLLER_COMMAND_COLUMN_READ] = orcs_engine.get_global_cycle() + this->latency_burst;
                 this->channel_last_command_cycle[MEMORY_CONTROLLER_COMMAND_COLUMN_READ] = orcs_engine.get_global_cycle() + this->latency_burst;
-                current_entry->updatePackageDRAMReady (this->TIMING_CAS + this->latency_burst);
+                current_entry->updatePackageDRAMReady (this->TIMING_CAS);
                 if (DEBUG) ORCS_PRINTF ("%lu Memory Channel %lu requestDRAM(): bank %lu, finished memory request %lu from uop %lu, %s.\n", orcs_engine.get_global_cycle(), get_channel (current_entry->memory_address), get_bank (current_entry->memory_address), current_entry->memory_address, current_entry->uop_number, get_enum_memory_operation_char (current_entry->memory_operation))
                 bank_read_requests[bank].erase(std::remove(bank_read_requests[bank].begin(), bank_read_requests[bank].end(), current_entry), bank_read_requests[bank].end());
                 bank_read_requests[bank].shrink_to_fit();
@@ -436,7 +442,7 @@ void memory_channel_t::clock(){
                 this->bank_last_command[bank] = MEMORY_CONTROLLER_COMMAND_COLUMN_WRITE;
                 this->bank_last_command_cycle[bank][MEMORY_CONTROLLER_COMMAND_COLUMN_WRITE] = orcs_engine.get_global_cycle() + this->latency_burst;
                 this->channel_last_command_cycle[MEMORY_CONTROLLER_COMMAND_COLUMN_WRITE] = orcs_engine.get_global_cycle() + this->latency_burst;
-                current_entry->updatePackageDRAMReady (this->TIMING_CWD + this->latency_burst);
+                current_entry->updatePackageDRAMReady (this->TIMING_CWD);
                 if (DEBUG) ORCS_PRINTF ("%lu Memory Channel %lu requestDRAM(): bank %lu, finished memory request %lu from uop %lu, %s.\n", orcs_engine.get_global_cycle(), get_channel (current_entry->memory_address), get_bank (current_entry->memory_address), current_entry->memory_address, current_entry->uop_number, get_enum_memory_operation_char (current_entry->memory_operation))
                 bank_write_requests[bank].erase(std::remove(bank_write_requests[bank].begin(), bank_write_requests[bank].end(), current_entry), bank_write_requests[bank].end());
                 bank_write_requests[bank].shrink_to_fit();

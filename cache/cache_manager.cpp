@@ -485,6 +485,9 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
         printf("cacheManager - finishRequest - Completing original request [Addr: %lu - Size: %u]\n", request->subrequest_from->memory_address, request->subrequest_from->memory_size);
         ongoing_requests.erase(std::remove (ongoing_requests.begin(), ongoing_requests.end(), request->subrequest_from), ongoing_requests.end());
         ongoing_requests.shrink_to_fit();
+
+        // Remove original request
+        delete request->subrequest_from;
     }
 
     // Remove subrequest
@@ -498,8 +501,7 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
 
     
 
-    // Remove request
-    delete request->subrequest_from;
+
 
     // Remove subrequest
     if (!is_prefetch) { delete request; }
@@ -581,12 +583,12 @@ bool cache_manager_t::searchData(memory_package_t *request) {
         // *********************************************************************
         // Get the first cache line address to be loaded
         // *********************************************************************
-        uint64_t base_address = request->memory_address  & (~(LINE_SIZE-1));
+        uint64_t base_address = request->memory_address  & (~(((uint64_t)LINE_SIZE)-1));
         
         // *********************************************************************
         // Get the number of bytes to be loaded
         // *********************************************************************
-        uint64_t loaded_bytes = request->memory_size + (request->memory_address & (LINE_SIZE - 1));
+        uint64_t loaded_bytes = request->memory_size + (request->memory_address & (((uint64_t)LINE_SIZE) - 1));
         
         // *********************************************************************
         // Generate the new sub-requests
