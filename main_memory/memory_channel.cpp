@@ -73,7 +73,7 @@ void memory_channel_t::allocate() {
     libconfig::Setting &cfg_cache_defs = cfg_root["CACHE_MEMORY"];
     
     if (cfg_memory_ctrl.exists("LINE_SIZE")) {
-        printf("WARNING: The cache line size should be only defined in the cache configuration. Check your configuration files!\n");
+        printf("ERROR: The cache line size should be only defined in the cache configuration. Check your configuration files!\n");
         exit(1);
     }
 

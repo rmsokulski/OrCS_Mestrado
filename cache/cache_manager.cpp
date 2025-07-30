@@ -249,26 +249,6 @@ void cache_manager_t::allocate(uint32_t NUMBER_OF_PROCESSORS) {
         this->prefetcher->allocate(NUMBER_OF_PROCESSORS);
     }
 
-    libconfig::Setting &cfg_processor = cfg_root["PROCESSOR"][0];
-    if (cfg_processor.exists("SIMULATED_VECTOR_LOAD_SIZE"))
-    { set_SIMULATED_VECTOR_LOAD_SIZE(cfg_processor["SIMULATED_VECTOR_LOAD_SIZE"]); }
-    else
-    { set_SIMULATED_VECTOR_LOAD_SIZE(0); }
-
-    if (cfg_processor.exists("MOB_SIMULATED_VECTOR_LOAD_ENTRIES"))
-    { set_MOB_SIMULATED_VECTOR_LOAD_ENTRIES(cfg_processor["MOB_SIMULATED_VECTOR_LOAD_ENTRIES"]); }
-    else
-    { set_MOB_SIMULATED_VECTOR_LOAD_ENTRIES(0); }
-
-
-    // Prefetch requests mob
-    if (MOB_SIMULATED_VECTOR_LOAD_ENTRIES)
-    {
-        this->request_memory_packages = utils_t::template_allocate_array<memory_package_t> (MOB_SIMULATED_VECTOR_LOAD_ENTRIES);
-    }
-    this->request_memory_packages_start = 0;
-    this->request_memory_packages_end   = 0;
-    this->request_memory_packages_used  = 0;
 
     // Statistics
     this->prefetch_requests_sent = 0;
@@ -371,16 +351,7 @@ bool cache_manager_t::isIn (memory_package_t* subrequest, memory_package_t* requ
             return true;
         }
     }
-    for (i = 0; i < requests_prefetch.size(); i++){
-        if ((requests_prefetch[i]->memory_address >> this->offset) == tag && requests_prefetch[i]->type == request->type) {
-            #if MEMORY_DEBUG
-                ORCS_PRINTF ("will be forwarded by %lu %s.\n", requests_prefetch[i]->memory_address, get_enum_memory_operation_char (requests_prefetch[i]->memory_operation))
-            #endif
-            for (size_t j = 0; j < request->clients.size(); j++) requests_prefetch[i]->clients.push_back (request->clients[j]);
-            delete request;
-            return true;
-        }
-    }
+
     return false;
 }
 
@@ -391,7 +362,7 @@ void cache_manager_t::print_requests(){
     }
 }
 
-void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_indexes, std::vector<memory_package_t *>* requests_list, bool is_prefetch) {
+void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_indexes, std::vector<memory_package_t *>* requests_list) {
     #if MEMORY_DEBUG
         ORCS_PRINTF ("[CACM] %lu {%lu} %lu %s finishes! Took %lu cycles.\n", orcs_engine.get_global_cycle(), request->opcode_number, request->memory_address, get_enum_memory_operation_char (request->memory_operation), orcs_engine.get_global_cycle()-request->born_cycle)
     #endif
@@ -430,52 +401,52 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
 
     int32_t wait_time_levels = 0;
 
-    if (is_prefetch == false) {
-        if (request->memory_operation == MEMORY_OPERATION_INST) {
-            //printf("Finishing request\n");
-            for (i = 0; i < INSTRUCTION_LEVELS; i++) {
-                if (request->sent_to_cache_level[this->instruction_cache[i][cache_indexes[i]].level]) {
-                    #if PROCESSOR_DEBUG
-                        ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) instruction_cache[i][cache_indexes[i]].id), instruction_cache[i][cache_indexes[i]].count, instruction_cache[i][cache_indexes[i]].count-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
-                    #endif
-                    wait_time_levels = orcs_engine.get_global_cycle() - request->sent_to_cache_level_at[i];
-                    this->instruction_cache[i][cache_indexes[i]].count--;
-                    this->instruction_cache[i][cache_indexes[i]].total_per_type[request->memory_operation] += wait_time_levels;
-                    if (wait_time_levels > this->instruction_cache[i][cache_indexes[i]].max_per_type[request->memory_operation]) this->instruction_cache[i][cache_indexes[i]].max_per_type[request->memory_operation] = wait_time_levels;
-                    if (wait_time_levels < this->instruction_cache[i][cache_indexes[i]].min_per_type[request->memory_operation]) this->instruction_cache[i][cache_indexes[i]].min_per_type[request->memory_operation] = wait_time_levels;
-                    ERROR_ASSERT_PRINTF (this->instruction_cache[i][cache_indexes[i]].count > -1, "VALUE BECOMES NEGATIVE")
-                }
-            }
 
-            for (i = INSTRUCTION_LEVELS; i < request->next_level; i++) {
-                if (request->sent_to_cache_level[this->data_cache[i][cache_indexes[i]].level]) {
-                    #if PROCESSOR_DEBUG
-                        ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) data_cache[i][cache_indexes[i]].id), data_cache[i][cache_indexes[i]].count, data_cache[i][cache_indexes[i]].count-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
-                    #endif
-                    wait_time_levels = orcs_engine.get_global_cycle() - request->sent_to_cache_level_at[i];
-                    this->data_cache[i][cache_indexes[i]].count--;
-                    this->data_cache[i][cache_indexes[i]].total_per_type[request->memory_operation] += wait_time_levels;
-                    if (wait_time_levels > this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation] = wait_time_levels;
-                    if (wait_time_levels < this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation] = wait_time_levels;
-                    ERROR_ASSERT_PRINTF (this->data_cache[i][cache_indexes[i]].count > -1, "VALUE BECOMES NEGATIVE")
-                }
+    if (request->memory_operation == MEMORY_OPERATION_INST) {
+        //printf("Finishing request\n");
+        for (i = 0; i < INSTRUCTION_LEVELS; i++) {
+            if (request->sent_to_cache_level[this->instruction_cache[i][cache_indexes[i]].level]) {
+                #if PROCESSOR_DEBUG
+                    ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) instruction_cache[i][cache_indexes[i]].id), instruction_cache[i][cache_indexes[i]].count, instruction_cache[i][cache_indexes[i]].count-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
+                #endif
+                wait_time_levels = orcs_engine.get_global_cycle() - request->sent_to_cache_level_at[i];
+                this->instruction_cache[i][cache_indexes[i]].count--;
+                this->instruction_cache[i][cache_indexes[i]].total_per_type[request->memory_operation] += wait_time_levels;
+                if (wait_time_levels > this->instruction_cache[i][cache_indexes[i]].max_per_type[request->memory_operation]) this->instruction_cache[i][cache_indexes[i]].max_per_type[request->memory_operation] = wait_time_levels;
+                if (wait_time_levels < this->instruction_cache[i][cache_indexes[i]].min_per_type[request->memory_operation]) this->instruction_cache[i][cache_indexes[i]].min_per_type[request->memory_operation] = wait_time_levels;
+                ERROR_ASSERT_PRINTF (this->instruction_cache[i][cache_indexes[i]].count > -1, "VALUE BECOMES NEGATIVE")
             }
-        } else {
-            for (i = 0; i < request->next_level; i++) {
-                if (request->sent_to_cache_level[this->data_cache[i][cache_indexes[i]].level]){
-                    #if PROCESSOR_DEBUG
-                        ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) data_cache[i][cache_indexes[i]].id), data_cache[i][cache_indexes[i]].count, data_cache[i][cache_indexes[i]].count-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
-                    #endif
-                    wait_time_levels = orcs_engine.get_global_cycle() - request->sent_to_cache_level_at[i];
-                    this->data_cache[i][cache_indexes[i]].count--;
-                    this->data_cache[i][cache_indexes[i]].total_per_type[request->memory_operation] += wait_time_levels;
-                    if (wait_time_levels > this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation] = wait_time_levels;
-                    if (wait_time_levels < this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation] = wait_time_levels;
-                    ERROR_ASSERT_PRINTF (this->data_cache[i][cache_indexes[i]].count > -1, "VALUE BECOMES NEGATIVE")
-                }
+        }
+
+        for (i = INSTRUCTION_LEVELS; i < request->next_level; i++) {
+            if (request->sent_to_cache_level[this->data_cache[i][cache_indexes[i]].level]) {
+                #if PROCESSOR_DEBUG
+                    ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) data_cache[i][cache_indexes[i]].id), data_cache[i][cache_indexes[i]].count, data_cache[i][cache_indexes[i]].count-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
+                #endif
+                wait_time_levels = orcs_engine.get_global_cycle() - request->sent_to_cache_level_at[i];
+                this->data_cache[i][cache_indexes[i]].count--;
+                this->data_cache[i][cache_indexes[i]].total_per_type[request->memory_operation] += wait_time_levels;
+                if (wait_time_levels > this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation] = wait_time_levels;
+                if (wait_time_levels < this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation] = wait_time_levels;
+                ERROR_ASSERT_PRINTF (this->data_cache[i][cache_indexes[i]].count > -1, "VALUE BECOMES NEGATIVE")
+            }
+        }
+    } else {
+        for (i = 0; i < request->next_level; i++) {
+            if (request->sent_to_cache_level[this->data_cache[i][cache_indexes[i]].level]){
+                #if PROCESSOR_DEBUG
+                    ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) data_cache[i][cache_indexes[i]].id), data_cache[i][cache_indexes[i]].count, data_cache[i][cache_indexes[i]].count-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
+                #endif
+                wait_time_levels = orcs_engine.get_global_cycle() - request->sent_to_cache_level_at[i];
+                this->data_cache[i][cache_indexes[i]].count--;
+                this->data_cache[i][cache_indexes[i]].total_per_type[request->memory_operation] += wait_time_levels;
+                if (wait_time_levels > this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation] = wait_time_levels;
+                if (wait_time_levels < this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation] = wait_time_levels;
+                ERROR_ASSERT_PRINTF (this->data_cache[i][cache_indexes[i]].count > -1, "VALUE BECOMES NEGATIVE")
             }
         }
     }
+
     //if (request->is_vima) ORCS_PRINTF ("%lu Cache Manager finishRequest(): VIMA INSTRUCTION READY!\n", orcs_engine.get_global_cycle())
 
     #if MEMORY_REQUESTS_DEBUG
@@ -512,13 +483,8 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
         ORCS_PRINTF ("%lu Cache Manager finishRequest(): finished memory request %lu from uop %lu, %s.\n", orcs_engine.get_global_cycle(), request->memory_address, request->uop_number, get_enum_memory_operation_char (request->memory_operation))
     #endif
 
-    
-
-
-
     // Remove subrequest
-    if (!is_prefetch) { delete request; }
-
+    delete request;
 
 }
 
@@ -563,15 +529,6 @@ void cache_manager_t::install (memory_package_t* request){
     }
     
     delete[] cache_indexes;
-}
-
-
-bool client_is_first_vector_load(memory_package_t *request) {
-    for (uint32_t c = 0; c < request->clients.size(); ++c) {
-        memory_order_buffer_line_t * mob_line = (memory_order_buffer_line_t *) request->clients[c];
-        if (mob_line->is_first_of_vector_load) return true;
-    }
-    return false;
 }
 
 uint64_t already_searching_inst = 0;
@@ -707,47 +664,6 @@ void cache_manager_t::process (memory_package_t* request, int32_t* cache_indexes
                 orcs_engine.memory_controller->add_requests_llc();
                 orcs_engine.memory_controller->requestDRAM (request);
 
-                // Check if its the first load request from RVV
-                // // The read check is necessary because writes do not have clients
-                if ((request->memory_operation == MEMORY_OPERATION_READ) && (client_is_first_vector_load(request))) {
-
-                    // Get the request required size
-                    uint32_t request_size = (request->memory_size < SIMULATED_VECTOR_LOAD_SIZE) ?
-                                        SIMULATED_VECTOR_LOAD_SIZE : request->memory_size;
-
-                    // Create múltiple prefetch requests
-                    uint32_t num_generated_requests = (request_size <= LINE_SIZE) ? 0 : (ceil((request_size + 0.0f) / LINE_SIZE) - 1);
-
-                    for (uint32_t i=0; i < num_generated_requests; ++i) {
-                    // Try to allocate a new prefetch package
-                    memory_package_t *mp =  get_next_prefetch_package();
-
-                    // If there are no available packages
-                    if (!mp) break;
-
-                    // Fill with info from the old request
-                    mp->copy(request);
-
-                    // Remove clients and spurious info
-                    mp->clients.clear();
-                    mp->sent_to_ram = false;
-                    mp->free = false;  // This was erased by the copy
-
-                    // Update request access address
-                    mp->memory_address = request->memory_address + ((i + 1) * LINE_SIZE);
-
-                    // Save request
-                    requests_prefetch.push_back(mp);
-
-                    // Send request to DRAM
-                    orcs_engine.memory_controller->add_requests_llc();
-                    orcs_engine.memory_controller->requestDRAM(mp);
-                    this->prefetch_requests_sent++;
-                    }
-
-
-                }
-
             }
             break;
         case MEMORY_OPERATION_HIVE_FP_ALU:
@@ -821,54 +737,13 @@ void cache_manager_t::clock() {
                     // -----------------------------------------------------------------------------------------
                     // Contabiliza estatísticas e remove a requisição
                     // -----------------------------------------------------------------------------------------
-                    this->finishRequest (requests[i], cache_indexes, &requests, false);
+                    this->finishRequest (requests[i], cache_indexes, &requests);
                     --i;
                 }
                 // -----------------------------------------------------------------------------------------
                 // Se ainda precisa de requisições, o envia para o próximo no nível de cache/DRAM
                 // -----------------------------------------------------------------------------------------
                 else if (!requests[i]->sent_to_ram) this->process (requests[i], cache_indexes);
-            }
-
-        }
-        delete[] cache_indexes;
-    }
-    if (requests_prefetch.size() > 0) {
-        int32_t *cache_indexes = new int32_t[POINTER_LEVELS]();
-
-        // -----------------------------------------------------------------------------------------
-        // Para cada requisição feita às caches
-        // -----------------------------------------------------------------------------------------
-        for (size_t i = 0; i < requests_prefetch.size(); i++){
-            // -----------------------------------------------------------------------------------------
-            // Se a requisição está pronta
-            // -----------------------------------------------------------------------------------------
-            if (requests_prefetch[i]->readyAt <= orcs_engine.get_global_cycle()){
-                // -----------------------------------------------------------------------------------------
-                // Obtém em quais caches esses dados deveriam estar posicionados
-                // -----------------------------------------------------------------------------------------
-                generateIndexArray(requests_prefetch[i]->processor_id, cache_indexes);
-
-                // -----------------------------------------------------------------------------------------
-                // Se o pacote está esperando ser finalizado
-                // -----------------------------------------------------------------------------------------
-                if (requests_prefetch[i]->status == PACKAGE_STATE_WAIT){
-                    // -----------------------------------------------------------------------------------------
-                    // Se ele foi completado pela DRAM, instala nas caches
-                    // -----------------------------------------------------------------------------------------
-                    if (requests_prefetch[i]->sent_to_ram) this->install (requests_prefetch[i]);
-                    
-                    // -----------------------------------------------------------------------------------------
-                    // Contabiliza estatísticas e remove a requisição
-                    // -----------------------------------------------------------------------------------------
-                    requests_prefetch[i]->free = true;
-                    this->finishRequest (requests_prefetch[i], cache_indexes, &requests_prefetch, true);
-                    --i;
-                }
-                // -----------------------------------------------------------------------------------------
-                // Se ainda precisa de requisições, o envia para o próximo no nível de cache/DRAM
-                // -----------------------------------------------------------------------------------------
-                else if (!requests_prefetch[i]->sent_to_ram) this->process (requests_prefetch[i], cache_indexes);
             }
 
         }
@@ -1089,39 +964,4 @@ void cache_manager_t::reset_statistics (uint32_t core_id) {
     if (PREFETCHER_ACTIVE) this->prefetcher->reset_statistics();
 
     delete[] cache_indexes;
-}
-
-void cache_manager_t::remove_front_prefetch_package() {
-    this->request_memory_packages_used--;
-    this->request_memory_packages[this->request_memory_packages_start].package_clean();
-    this->request_memory_packages_start++;
-
-    this->request_memory_packages_start = this->request_memory_packages_start % MOB_SIMULATED_VECTOR_LOAD_ENTRIES;
-
-}
-
-memory_package_t * cache_manager_t::get_next_prefetch_package() {
-    int32_t position = POSITION_FAIL;
-
-    // Release the next position
-    if (MOB_SIMULATED_VECTOR_LOAD_ENTRIES
-        && request_memory_packages[request_memory_packages_start].free
-        && request_memory_packages_used > 0) {
-        remove_front_prefetch_package();
-    }
-
-    // Search for the next free position
-    if (request_memory_packages_used < MOB_SIMULATED_VECTOR_LOAD_ENTRIES)
-    {
-        position = this->request_memory_packages_end;
-        this->request_memory_packages_used++;
-        this->request_memory_packages_end++;
-        
-        this->request_memory_packages_end = this->request_memory_packages_end % MOB_SIMULATED_VECTOR_LOAD_ENTRIES;
-            
-        this->request_memory_packages[position].free = false;
-    }
-
-    return (position != POSITION_FAIL) ? &request_memory_packages[position] : 0x0;
-
 }

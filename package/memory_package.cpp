@@ -33,7 +33,6 @@ memory_package_t::memory_package_t() {
     this->vima_write_vec = NULL;
 
     this->is_vectorial_part = -1;
-    this->free = true;
 
     row_buffer = false;
     type = DATA;
@@ -272,5 +271,4 @@ void memory_package_t::copy(memory_package_t *other) {
     // this->subrequest_from = std::vector<memory_package_t*>();
     // this->num_subrequests = other->num_subrequests;
 
-    // this->free = other->free;
 }

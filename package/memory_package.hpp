@@ -45,7 +45,6 @@ class memory_package_t {
         memory_operation_t memory_operation;    /// memory operation
         std::vector<memory_request_client_t*> clients; ///update these
 
-        bool free;
 
         memory_package_t();
         ~memory_package_t();

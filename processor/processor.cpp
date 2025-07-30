@@ -340,6 +340,15 @@ void processor_t::allocate()
 	// Processor defaults
 	libconfig::Setting &cfg_processor = cfg_root["PROCESSOR"][0];
 
+	if (cfg_processor.exists("SIMULATED_VECTOR_LOAD_SIZE") ||
+		(cfg_processor.exists("MOB_SIMULATED_VECTOR_LOAD_ENTRIES")))
+	 {
+		printf("ERROR: Some configurations are deprecated and must be removed!\n");
+		printf(" - SIMULATED_VECTOR_LOAD_SIZE\n");
+		printf(" - MOB_SIMULATED_VECTOR_LOAD_ENTRIES\n");
+		exit(1);
+	}
+
 	if (cfg_root.exists("VIMA_CONTROLLER"))
 	{
 		libconfig::Setting &cfg_vima = cfg_root["VIMA_CONTROLLER"];
@@ -1060,11 +1069,6 @@ void processor_t::fetch()
 							operation.opcode_number,
 							operation.content_to_string2().c_str())
 #endif
-
-			//========================
-			//Mark vector insn
-			//========================
-			operation.is_vector_insn = is_vector_insn(&operation);
 
 
 			//============================
@@ -2574,7 +2578,6 @@ void processor_t::rename()
 			for (uint32_t r = 0; r < rob_line->uop.num_mem_operations; ++r)
 			{
 				uint32_t pos = (pos_mob + r) % MOB_LIMIT;
-  				rob_line->mob_base[pos].is_first_of_vector_load = ((r == 0) && rob_line->uop.is_vector_insn);
 				rob_line->mob_base[pos].opcode_address = rob_line->uop.opcode_address;
 				rob_line->mob_base[pos].memory_address = rob_line->uop.memory_address[r];
 				rob_line->mob_base[pos].memory_size = rob_line->uop.memory_size[r];
@@ -4128,13 +4131,6 @@ void processor_t::printConfiguration()
 	}
 }
 
-// ============================================================================
-
-bool processor_t::is_vector_insn(opcode_package_t *insn) {
-	// Deve verificar se o opcode_assembly começa com v
-	if (insn->opcode_assembly[0] == 'v') return true;
-	return false;
-}
 
 // ============================================================================
 void processor_t::clock()

@@ -34,7 +34,6 @@ class memory_order_buffer_line_t : public memory_request_client_t {
         bool forwarded_data;
         bool waiting_DRAM;
         bool core_generate_miss;
-        bool is_first_of_vector_load;
         // ====================================================================
         /// Methods
         // ====================================================================
