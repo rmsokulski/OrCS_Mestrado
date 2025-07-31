@@ -1021,7 +1021,7 @@ uint64_t processor_t::get_instruction_loads_stride(opcode_package_t *operation, 
 
 uint64_t processor_t::get_instruction_stores_stride(opcode_package_t *operation, bool *is_strided) {
 	uint64_t stride = operation->writes_addr[1] - operation->writes_addr[0];
-	
+
 	// For each load, check the stride
 	for (uint32_t i=2; i < operation->num_writes; ++i) {
 		if (stride != (operation->writes_addr[i] - operation->writes_addr[i-1])) {
@@ -1976,13 +1976,13 @@ void processor_t::decode()
 										UOPS_LINK_REGISTER, MAX_REGISTERS);
 				}
 				// Dependency with previous uop from instruction
-  				else if (current_uop_counter > 0) { 
+  				else if (current_uop_counter > 0) {
   				  // Find the first empty register
   				  for (uint32_t i = 0; i < MAX_REGISTERS; i++)
   				  {
   				    if (new_uop.read_regs[i] == POSITION_FAIL)
   				    {
-  				           // Use it to link
+  				      // Use it to link
   				      new_uop.read_regs[i] = UOPS_LINK_REGISTER;
   				      break;
   				    }

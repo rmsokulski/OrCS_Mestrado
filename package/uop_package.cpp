@@ -155,5 +155,22 @@ std::string uop_package_t::content_to_string2() {
     content_string = content_string + " Status Opcode "+ get_enum_package_state_char(this->status);
     content_string = content_string + " Ready At" + utils_t::uint64_to_string(this->readyAt);
 
+// *********
+    content_string = content_string + " | RRegs[";
+    for (uint32_t i = 0; i < MAX_REGISTERS; i++) {
+        if (this->read_regs[i] >= 0) {
+            content_string = content_string + " " + utils_t::uint32_to_string(this->read_regs[i]);
+        }
+    }
+
+    content_string = content_string + " ] | WRegs[";
+    for (uint32_t i = 0; i < MAX_REGISTERS; i++) {
+        if (this->write_regs[i] >= 0) {
+            content_string = content_string + " " + utils_t::uint32_to_string(this->write_regs[i]);
+        }
+    }
+    content_string = content_string + " ]";
+// **********
+
     return content_string;
 }
