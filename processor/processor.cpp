@@ -1003,6 +1003,40 @@ void processor_t::remove_back_mob_write()
 }
 // ============================================================================
 
+uint64_t processor_t::get_instruction_loads_stride(opcode_package_t *operation, bool *is_strided) {
+	uint64_t stride = operation->reads_addr[1] - operation->reads_addr[0];
+
+	// For each load, check the stride
+	for (uint32_t i=2; i < operation->num_reads; ++i) {
+		if (stride != (operation->reads_addr[i] - operation->reads_addr[i-1])) {
+			*is_strided = false;
+			return 0;
+
+		}
+	}
+	
+	*is_strided = true;
+	return stride;
+}
+
+uint64_t processor_t::get_instruction_stores_stride(opcode_package_t *operation, bool *is_strided) {
+	uint64_t stride = operation->writes_addr[1] - operation->writes_addr[0];
+	
+	// For each load, check the stride
+	for (uint32_t i=2; i < operation->num_writes; ++i) {
+		if (stride != (operation->writes_addr[i] - operation->writes_addr[i-1])) {
+			*is_strided = false;
+			return 0;
+
+		}
+	}
+	
+	*is_strided = true;
+	return stride;
+}
+
+// ============================================================================
+
 uint64_t fetch_CacheManager_Inst_requests = 0;
 uint64_t instructions_mshr_stall = 0;
 
@@ -1098,6 +1132,53 @@ void processor_t::fetch()
 				this->previousBranch = operation;
 				this->hasBranch = true;
 			}
+
+			//============================
+			// Memory accesses fusing
+			//============================
+
+			if (operation.num_reads > 1) {
+				// Check for stride
+				bool is_strided;
+				uint64_t stride = get_instruction_loads_stride(&operation, &is_strided);
+
+				if (is_strided && stride <= LINE_SIZE) { // Smaller than the cache line size
+					// **************************************
+					// Fuse loads
+					// **************************************
+					uint64_t initial_address = operation.reads_addr[0];
+					uint64_t accesses_size = (stride * (operation.num_reads - 1)) + operation.reads_size[operation.num_reads - 1];
+
+					// Adjust requests
+					operation.reads_addr[0] = initial_address;
+					operation.reads_size[0] = accesses_size;
+					operation.num_reads = 1;
+				}
+			}
+
+			if (operation.num_writes > 1) {
+				// Check for stride
+				bool is_strided;
+				uint64_t stride = get_instruction_stores_stride(&operation, &is_strided);
+
+				if (is_strided && stride <= LINE_SIZE) { // Smaller than the cache line size
+					
+					// **************************************
+					// Fuse stores
+					// **************************************
+					uint64_t initial_address = operation.writes_addr[0];
+					uint64_t accesses_size = (stride * (operation.num_writes - 1)) + operation.writes_size[operation.num_writes - 1];
+
+					// Adjust requests
+					operation.writes_addr[0] = initial_address;
+					operation.writes_size[0] = accesses_size;
+					operation.num_writes = 1;
+				}
+			}
+
+			//============================
+
+
 
 			//============================
 			//Insert into fetch buffer

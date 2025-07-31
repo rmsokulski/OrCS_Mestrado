@@ -321,6 +321,9 @@ class processor_t {
 		// ====================================================================
 		// Other Methods
 		// ====================================================================
+
+		uint64_t get_instruction_loads_stride(opcode_package_t *operation, bool *is_strided);
+		uint64_t get_instruction_stores_stride(opcode_package_t *operation, bool *is_strided);
 		
 		// =======================
 		// Buffers
