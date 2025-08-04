@@ -6,6 +6,7 @@ class memory_controller_t{
     private:
         // Statistics DRAM
         uint64_t requests_made; //Data Requests made
+        uint64_t sub_requests_made; //Data Requests made to the banks
         uint64_t operations_executed; // number of operations executed
         uint64_t requests_llc; //Data Requests made to LLC
         uint64_t requests_hive;
@@ -112,6 +113,7 @@ class memory_controller_t{
         uint64_t requestDRAM (memory_package_t* request);
         //statistiscs methods
         INSTANTIATE_GET_SET_ADD(uint64_t,requests_made)
+        INSTANTIATE_GET_SET_ADD(uint64_t,sub_requests_made)
         INSTANTIATE_GET_SET_ADD(uint64_t,operations_executed)
         INSTANTIATE_GET_SET_ADD(uint64_t,requests_llc)
         INSTANTIATE_GET_SET_ADD(uint64_t,requests_hive)

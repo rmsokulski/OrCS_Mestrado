@@ -3,6 +3,7 @@
 // ============================================================================
 memory_controller_t::memory_controller_t(){
     this->requests_made = 0; //Data Requests made
+    this->sub_requests_made = 0;
     this->operations_executed = 0; // number of operations executed
     this->requests_llc = 0; //Data Requests made to LLC
     this->requests_hive = 0;
@@ -145,6 +146,7 @@ void memory_controller_t::statistics(FILE *output){
         fprintf(output,"#Memory Controller\n");
         utils_t::largestSeparator(output);
         fprintf(output,"Requests_Made:               %lu\n",this->get_requests_made());
+        fprintf(output,"Sub_Requests_Made:               %lu\n",this->get_sub_requests_made());
         if (this->get_requests_prefetcher() > 0)  fprintf(output,"Requests_from_Prefetcher:    %lu\n",this->get_requests_prefetcher());
         fprintf(output,"Requests_from_LLC:           %lu\n",this->get_requests_llc());
         if (this->get_requests_hive() > 0) fprintf(output,"Requests_from_HIVE:          %lu\n",this->get_requests_hive());
@@ -162,7 +164,7 @@ void memory_controller_t::statistics(FILE *output){
         }
         fprintf(output,"Row_Buffer Total_Hits:       %u\n",total_rb_hits);
         fprintf(output,"Row_Buffer_Total_Misses:     %u\n",total_rb_misses);
-        fprintf(output,"Row_Buffer_Miss_Ratio:       %f\n", (float) total_rb_misses/this->get_requests_made());
+        fprintf(output,"Row_Buffer_Miss_Ratio:       %f\n", (float) total_rb_misses/this->get_sub_requests_made());
         for (i = 0; i < MEMORY_OPERATION_LAST; i++){
             if (this->total_operations[i] > 0) {
                 fprintf(output,"%s_Tot._Latency:          %lu\n", get_enum_memory_operation_char ((memory_operation_t) i), this->total_latency[i]);
@@ -364,6 +366,7 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
             printf("memory_controller_t - requestDRAM - Generating sub-request [Addr: %lu - Size: %u]\n", subrequest->memory_address, subrequest->memory_size);
             #endif
 
+            this->add_sub_requests_made();
             this->working.push_back (subrequest);
             this->working.shrink_to_fit();
         }
