@@ -244,6 +244,7 @@ inline void cache_t::writeBack(line_t *line, uint32_t processor_id, uint64_t mem
     	request->processor_id = processor_id;
       	request->memory_address = memory_address;
       	request->memory_operation = MEMORY_OPERATION_WRITE;
+		request->memory_size = this->LINE_SIZE;
       	request->is_hive = false;
       	request->is_vima = false;
       	request->status = PACKAGE_STATE_UNTREATED;
