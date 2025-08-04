@@ -145,6 +145,9 @@ void cache_manager_t::get_cache_info(cacheId_t cache_type, libconfig::Setting &c
                     cache[j].mshr_size = cfg_cache["MSHR_SIZE"];
                     cache[j].n_sets = (cache[j].size / LINE_SIZE) / cache[j].associativity;
                     cache[j].set_LINE_SIZE (LINE_SIZE);
+                    if (cache[j].n_sets < 1) {
+                        ERROR_PRINTF("%u B IS NOT ENOUGH SPACE FOR LINE_SIZE: %u B AND ASSOCIATIVITY %u\n", cache[j].size, LINE_SIZE, cache[j].associativity);
+                    }
                 }
                 
             } catch (libconfig::SettingNotFoundException const &nfex) {
