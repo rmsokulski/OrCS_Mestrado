@@ -143,30 +143,38 @@ void memory_channel_t::set_masks(){
     
     /// COLBYTE MASK
     for (i = 0; i < utils_t::get_power_of_two(this->LINE_SIZE); i++) {
-        this->colbyte_bits_mask |= 1 << (i + this->colbyte_bits_shift);
+        this->colbyte_bits_mask |= (uint64_t)1 << (i + this->colbyte_bits_shift);
     }
 
     /// COLROW MASK
     for (i = 0; i < utils_t::get_power_of_two(this->BANK_ROW_BUFFER_SIZE / this->LINE_SIZE); i++) {
-        this->colrow_bits_mask |= 1 << (i + this->colrow_bits_shift);
+        this->colrow_bits_mask |= (uint64_t)1 << (i + this->colrow_bits_shift);
     }
 
     this->not_column_bits_mask = ~(colbyte_bits_mask | colrow_bits_mask);
 
     /// CHANNEL MASK
     for (i = 0; i < utils_t::get_power_of_two(this->CHANNEL); i++) {
-        this->channel_bits_mask |= 1 << (i + channel_bits_shift);
+        this->channel_bits_mask |= (uint64_t)1 << (i + channel_bits_shift);
     }
 
     /// BANK MASK
     for (i = 0; i < utils_t::get_power_of_two(this->BANK); i++) {
-        this->bank_bits_mask |= 1 << (i + bank_bits_shift);
+        this->bank_bits_mask |= (uint64_t)1 << (i + bank_bits_shift);
     }
 
     /// ROW MASK
-    for (i = row_bits_shift; i < utils_t::get_power_of_two((uint64_t)INT64_MAX+1); i++) {
-        this->row_bits_mask |= 1 << i;
+    // printf("\nPreechendo de %lu a %lu\n", row_bits_shift, utils_t::get_power_of_two((uint64_t)INT64_MAX+1));
+    for (i = row_bits_shift; i < 64; i++) {
+        this->row_bits_mask |= (uint64_t)1 << i;
+        // printf("Activated bit: %lu -- %lu\n", i, this->row_bits_mask);
     }
+
+    // printf("colbyte_bits_mask - colbyte_bits_shift: %lu %lu", this->colbyte_bits_mask, this->colbyte_bits_shift);
+    // printf("colrow_bits_mask - colrow_bits_shift: %lu %lu", this->colrow_bits_mask, this->colrow_bits_shift);
+    // printf("channel_bits_mask - channel_bits_shift: %lu %lu", this->channel_bits_mask, this->channel_bits_shift);
+    // printf("bank_bits_mask - bank_bits_shift: %lu %lu", this->bank_bits_mask, this->bank_bits_shift);
+    // printf("row_bits_mask - row_bits_shift: %lu %lu", this->row_bits_mask, this->row_bits_shift);
 }
 
 bool memory_channel_t::addRequest (memory_package_t* request){

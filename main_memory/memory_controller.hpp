@@ -49,6 +49,7 @@ class memory_controller_t{
         uint64_t wait_time;
         
         uint32_t BANK;
+        uint32_t RANK;
         uint32_t BANK_ROW_BUFFER_SIZE;
         uint32_t BURST_WIDTH;
         uint32_t CHANNEL;
@@ -98,7 +99,7 @@ class memory_controller_t{
         }
         //get row accessed
         inline uint64_t get_row(uint64_t address){
-            return (address & this->not_column_bits_mask);
+            return (address & this->row_bits_mask) >> this->row_bits_shift;
         }
 
         bool isBusy();
@@ -128,6 +129,7 @@ class memory_controller_t{
         
         INSTANTIATE_GET_SET_ADD(uint32_t,LINE_SIZE)
         INSTANTIATE_GET_SET_ADD(uint32_t,BANK)
+        INSTANTIATE_GET_SET_ADD(uint32_t,RANK)
         INSTANTIATE_GET_SET_ADD(uint32_t,BANK_ROW_BUFFER_SIZE)
         INSTANTIATE_GET_SET_ADD(uint32_t,BURST_WIDTH)
         INSTANTIATE_GET_SET_ADD(uint32_t,CHANNEL)

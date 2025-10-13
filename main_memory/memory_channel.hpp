@@ -80,7 +80,7 @@ class memory_channel_t {
         }
         //get row accessed
         inline uint64_t get_row(uint64_t address){
-            return (address & this->not_column_bits_mask);
+            return (address & this->row_bits_mask) >> this->row_bits_shift;
         }
 
         memory_channel_t();

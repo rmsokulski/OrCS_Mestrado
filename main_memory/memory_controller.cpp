@@ -79,6 +79,15 @@ void memory_controller_t::allocate(){
     set_BANK (cfg_memory_ctrl["BANK"]);
     set_BANK_ROW_BUFFER_SIZE (cfg_memory_ctrl["BANK_ROW_BUFFER_SIZE"]);
     set_CHANNEL (cfg_memory_ctrl["CHANNEL"]);
+    if (cfg_memory_ctrl.exists("SUB_CHANNEL")) {
+        uint32_t subchannel = (uint32_t) cfg_memory_ctrl["SUB_CHANNEL"];
+        set_CHANNEL(get_CHANNEL() * subchannel);
+    }
+
+    if (cfg_memory_ctrl.exists("RANK")) {
+        set_RANK(cfg_memory_ctrl["RANK"]);
+    }
+
     set_BURST_WIDTH (cfg_memory_ctrl["BURST_WIDTH"]);
     set_LINE_SIZE (cfg_cache_defs["CONFIG"]["LINE_SIZE"]);
     set_WAIT_CYCLE (cfg_memory_ctrl["WAIT_CYCLE"]);
@@ -304,12 +313,12 @@ void memory_controller_t::set_masks(){
     
     /// COLBYTE MASK
     for (i = 0; i < utils_t::get_power_of_two(this->LINE_SIZE); i++) {
-        this->colbyte_bits_mask |= 1 << (i + this->colbyte_bits_shift);
+        this->colbyte_bits_mask |= (uint64_t)1 << (i + this->colbyte_bits_shift);
     }
 
     /// COLROW MASK
     for (i = 0; i < utils_t::get_power_of_two(this->BANK_ROW_BUFFER_SIZE / this->LINE_SIZE); i++) {
-        this->colrow_bits_mask |= 1 << (i + this->colrow_bits_shift);
+        this->colrow_bits_mask |= (uint64_t)1 << (i + this->colrow_bits_shift);
     }
 
     this->not_column_bits_mask = ~(colbyte_bits_mask | colrow_bits_mask);
@@ -321,9 +330,15 @@ void memory_controller_t::set_masks(){
     for (i = 0; i < utils_t::get_power_of_two(this->BANK); i++) this->bank_bits_mask |= 1 << (i + bank_bits_shift);
 
     /// ROW MASK
-    for (i = row_bits_shift; i < utils_t::get_power_of_two((uint64_t)INT64_MAX+1); i++) {
-        this->row_bits_mask |= 1 << i;
+    for (i = row_bits_shift; i < 64; i++) {
+        this->row_bits_mask |= (uint64_t)1 << i;
     }
+
+    // printf("colbyte_bits_mask - colbyte_bits_shift: %lu %lu", this->colbyte_bits_mask, this->colbyte_bits_shift);
+    // printf("colrow_bits_mask - colrow_bits_shift: %lu %lu", this->colrow_bits_mask, this->colrow_bits_shift);
+    // printf("channel_bits_mask - channel_bits_shift: %lu %lu", this->channel_bits_mask, this->channel_bits_shift);
+    // printf("bank_bits_mask - bank_bits_shift: %lu %lu", this->bank_bits_mask, this->bank_bits_shift);
+    // printf("row_bits_mask - row_bits_shift: %lu %lu", this->row_bits_mask, this->row_bits_shift);
 }
 //=====================================================================
 uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
