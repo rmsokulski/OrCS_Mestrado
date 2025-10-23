@@ -208,6 +208,8 @@ uint32_t cache_t::read(uint64_t address, uint32_t &ttc){
 		// Do not add miss, because will be added only once
 		this->set_mshr_stall(true);
 		this->add_num_mshr_stall();
+		this->concurrent_cache_accesses--;
+		this->cache_access--;
 		return MSHR_STALL;
 	}
 

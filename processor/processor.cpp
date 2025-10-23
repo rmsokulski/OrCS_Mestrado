@@ -483,7 +483,7 @@ void processor_t::allocate()
 	set_CACHE_LEVELS((INSTRUCTION_CACHES > DATA_CACHES) ? INSTRUCTION_CACHES : DATA_CACHES);
 
 	if (CACHE_LEVELS > MAX_NUM_CACHE_LEVELS) {
-		printf("ALERT: Adjust the definition defines.hpp: MAX_NUM_CACHE_LEVELS to at least %lu\n", CACHE_LEVELS);
+		printf("ALERT: Adjust the definition defines.hpp: MAX_NUM_CACHE_LEVELS to at least %u\n", CACHE_LEVELS);
 		exit(1);
 	}
 
