@@ -114,6 +114,7 @@ void cache_t::allocate(uint32_t NUMBER_OF_PROCESSORS, uint32_t INSTRUCTION_LEVEL
 	this->set_mshr_occupied_entries(0);
 	this->set_mshr_stall(false);
 	this->set_max_MSHR_reached(0);
+	this->set_num_mshr_stall(0);
 
 	this->cache_hit_per_type = new uint64_t[MEMORY_OPERATION_LAST]();
 	this->cache_miss_per_type = new uint64_t[MEMORY_OPERATION_LAST]();
@@ -206,6 +207,7 @@ uint32_t cache_t::read(uint64_t address, uint32_t &ttc){
 	} else {
 		// Do not add miss, because will be added only once
 		this->set_mshr_stall(true);
+		this->add_num_mshr_stall();
 		return MSHR_STALL;
 	}
 
@@ -449,6 +451,7 @@ void cache_t::statistics(FILE *output) {
 		fprintf(output, "%d_Cache_WriteBack:    %lu\n", this->level, this->get_cache_writeback());
 		fprintf(output, "%d_Concurrent_Requests_Max_Reached:   %u\n", this->level, this->get_max_reached());
 		fprintf(output, "%d_MSHR_Max_Reached:   %u\n", this->level, this->get_max_MSHR_reached());
+		fprintf(output, "%d_MSHR_Num_MSHR_Stall:   %u\n", this->level, this->get_num_mshr_stall());
 	}
 
 }

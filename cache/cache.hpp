@@ -61,6 +61,7 @@ class cache_t {
         int32_t max_reached;
         int32_t mshr_occupied_entries;
         int32_t max_MSHR_reached;
+        int32_t num_mshr_stall;
         /* 
         When MSHR is full and receives a new miss, the cache stalls until one of the misses arive.
         */
@@ -109,6 +110,7 @@ class cache_t {
         INSTANTIATE_GET_SET_ADD(int32_t,max_reached)
         INSTANTIATE_GET_SET_ADD(int32_t,mshr_occupied_entries)
         INSTANTIATE_GET_SET_ADD(int32_t,max_MSHR_reached)
+        INSTANTIATE_GET_SET_ADD(int32_t, num_mshr_stall)
         
 
         INSTANTIATE_GET_SET_ADD(uint32_t,LINE_SIZE)
