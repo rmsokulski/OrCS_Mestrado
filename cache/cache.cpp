@@ -451,7 +451,7 @@ void cache_t::statistics(FILE *output) {
 		fprintf(output, "%d_Cache_WriteBack:    %lu\n", this->level, this->get_cache_writeback());
 		fprintf(output, "%d_Concurrent_Requests_Max_Reached:   %u\n", this->level, this->get_max_reached());
 		fprintf(output, "%d_MSHR_Max_Reached:   %u\n", this->level, this->get_max_MSHR_reached());
-		fprintf(output, "%d_MSHR_Num_MSHR_Stall:   %u\n", this->level, this->get_num_mshr_stall());
+		fprintf(output, "%d_Num_MSHR_Stall:   %u\n", this->level, this->get_num_mshr_stall());
 	}
 
 }
