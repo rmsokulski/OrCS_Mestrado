@@ -17,21 +17,10 @@ enum taken_t{
 */
 enum cache_status_t{
     HIT,
-    MISS
+    MISS,
+    MSHR_STALL
 };
 // =====================================================
-/**
- * Enum cache Level
-*/
-enum cacheLevel_t{
-    L1,
-    L2,
-    LLC,
-    END
-};
-
-//get char operation
-const char* get_enum_cache_level_char(cacheLevel_t type);
 
 enum cacheId_t {
     INSTRUCTION,

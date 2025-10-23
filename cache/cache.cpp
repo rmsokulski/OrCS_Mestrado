@@ -20,6 +20,10 @@ cache_t::cache_t() {
     this->change_line = 0;
 	this->is_inst_cache = false;
 
+	this->mshr_occupied_entries = 0;
+	this->concurrent_cache_accesses = 0;
+	this->mshr_stall = false;
+
 	this->LINE_SIZE = 0;
     this->PREFETCHER_ACTIVE = 0;
     this->INSTRUCTION_LEVELS = 0;
@@ -105,8 +109,11 @@ void cache_t::allocate(uint32_t NUMBER_OF_PROCESSORS, uint32_t INSTRUCTION_LEVEL
     this->set_cache_write(0);
     this->set_cache_writeback(0);
 	this->set_change_line(0);
-	this->set_count(0);
+	this->set_concurrent_cache_accesses(0);
 	this->set_max_reached(0);
+	this->set_mshr_occupied_entries(0);
+	this->set_mshr_stall(false);
+	this->set_max_MSHR_reached(0);
 
 	this->cache_hit_per_type = new uint64_t[MEMORY_OPERATION_LAST]();
 	this->cache_miss_per_type = new uint64_t[MEMORY_OPERATION_LAST]();
@@ -142,10 +149,10 @@ uint32_t cache_t::read(uint64_t address, uint32_t &ttc){
     uint64_t idx;
     uint64_t tag;
 	this->tagIdxSetCalculation(address, &idx, &tag);
-	ERROR_ASSERT_PRINTF (this->get_count() < this->mshr_size, "REQUEST # > MSHR_SIZE")
-	this->add_count();
+	//ERROR_ASSERT_PRINTF (this->get_count() < this->mshr_size, "REQUEST # > MSHR_SIZE")
+	this->add_concurrent_cache_accesses();
 	this->add_cache_access();
-	if (this->get_count() > this->get_max_reached()) this->set_max_reached(this->get_count());
+	if (this->get_concurrent_cache_accesses() > this->get_max_reached()) this->set_max_reached(this->get_concurrent_cache_accesses());
 	for (size_t i = 0; i < this->sets->n_lines; i++) {
 		//printf("tag: %u\n", this->sets[idx].lines[i].dirty);
 		if(this->sets[idx].lines[i].tag == tag) {
@@ -186,6 +193,23 @@ uint32_t cache_t::read(uint64_t address, uint32_t &ttc){
 			}
 		}
 	}
+	// Allocate MSHR entry
+	if (this->get_mshr_occupied_entries() < this->mshr_size) {
+
+		// ******************************************************************************************
+		// Note that, if the request reaches a memory level, it is in the MSHR of the superior ones
+		// ******************************************************************************************
+		this->add_mshr_occupied_entries();
+
+		if (this->get_mshr_occupied_entries() > this->get_max_MSHR_reached()) this->set_max_MSHR_reached(this->get_mshr_occupied_entries());
+
+	} else {
+		// Do not add miss, because will be added only once
+		this->set_mshr_stall(true);
+		return MSHR_STALL;
+	}
+
+
 	ttc += this->latency;
 	this->add_cache_miss();
 	return MISS;
@@ -423,7 +447,8 @@ void cache_t::statistics(FILE *output) {
 
 		if(this->get_cache_writeback()!=0) 
 		fprintf(output, "%d_Cache_WriteBack:    %lu\n", this->level, this->get_cache_writeback());
-		fprintf(output, "%d_MSHR_Max_Reached:   %u\n", this->level, this->get_max_reached());
+		fprintf(output, "%d_Concurrent_Requests_Max_Reached:   %u\n", this->level, this->get_max_reached());
+		fprintf(output, "%d_MSHR_Max_Reached:   %u\n", this->level, this->get_max_MSHR_reached());
 	}
 
 }

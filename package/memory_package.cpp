@@ -17,7 +17,7 @@ memory_package_t::memory_package_t() {
     this->hive_cycle = 0;
        
     sent_to_ram = false;
-    next_level = L1;
+    next_level = 0;
     cache_latency = 0;
     is_hive = false;
     hive_read1 = 0;
@@ -37,8 +37,8 @@ memory_package_t::memory_package_t() {
     row_buffer = false;
     type = DATA;
     op_count = new uint64_t[MEMORY_OPERATION_LAST]();
-    sent_to_cache_level = new uint32_t[END]();
-    sent_to_cache_level_at = new uint32_t[END]();
+    sent_to_cache_level = new uint32_t[MAX_NUM_CACHE_LEVELS]();
+    sent_to_cache_level_at = new uint32_t[MAX_NUM_CACHE_LEVELS]();
     this->latency = 0;
 
     this->subrequest_from = std::vector<memory_package_t*>();
@@ -191,7 +191,7 @@ void memory_package_t::package_clean() {
     this->hive_cycle = 0;
        
     sent_to_ram = false;
-    next_level = L1;
+    next_level = 0;
     cache_latency = 0;
     is_hive = false;
     hive_read1 = 0;
@@ -212,8 +212,8 @@ void memory_package_t::package_clean() {
     type = DATA;
 
     for (int i=0; i < MEMORY_OPERATION_LAST; ++i) { op_count[i] = 0; }
-    for (int i=0; i < END; ++i) { sent_to_cache_level[i] = 0; }
-    for (int i=0; i < END; ++i) { sent_to_cache_level_at[i] = 0; }
+    for (int i=0; i < MAX_NUM_CACHE_LEVELS; ++i) { sent_to_cache_level[i] = 0; }
+    for (int i=0; i < MAX_NUM_CACHE_LEVELS; ++i) { sent_to_cache_level_at[i] = 0; }
 
     this->latency = 0;
 
@@ -260,8 +260,8 @@ void memory_package_t::copy(memory_package_t *other) {
     type       = other->type;
 
     for (int i=0; i < MEMORY_OPERATION_LAST; ++i) { op_count[i] = other->op_count[i]; }
-    for (int i=0; i < END; ++i) { sent_to_cache_level[i] = other->sent_to_cache_level[i]; }
-    for (int i=0; i < END; ++i) { sent_to_cache_level_at[i] = other->sent_to_cache_level_at[i]; }
+    for (int i=0; i < MAX_NUM_CACHE_LEVELS; ++i) { sent_to_cache_level[i] = other->sent_to_cache_level[i]; }
+    for (int i=0; i < MAX_NUM_CACHE_LEVELS; ++i) { sent_to_cache_level_at[i] = other->sent_to_cache_level_at[i]; }
 
     this->latency    = other->latency;
 

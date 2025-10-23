@@ -57,8 +57,15 @@ class cache_t {
         cacheSet_t *sets;
         uint32_t offset;
         int32_t mshr_size;
-        int32_t count;
+        int32_t concurrent_cache_accesses;
         int32_t max_reached;
+        int32_t mshr_occupied_entries;
+        int32_t max_MSHR_reached;
+        /* 
+        When MSHR is full and receives a new miss, the cache stalls until one of the misses arive.
+        */
+        bool mshr_stall;
+
         bool is_inst_cache;
 
         uint64_t* cache_hit_per_type;
@@ -98,8 +105,11 @@ class cache_t {
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_inst)
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_writeback)
         INSTANTIATE_GET_SET_ADD(uint64_t,change_line)
-        INSTANTIATE_GET_SET_ADD(int32_t,count)
+        INSTANTIATE_GET_SET_ADD(int32_t,concurrent_cache_accesses)
         INSTANTIATE_GET_SET_ADD(int32_t,max_reached)
+        INSTANTIATE_GET_SET_ADD(int32_t,mshr_occupied_entries)
+        INSTANTIATE_GET_SET_ADD(int32_t,max_MSHR_reached)
+        
 
         INSTANTIATE_GET_SET_ADD(uint32_t,LINE_SIZE)
         INSTANTIATE_GET_SET_ADD(uint32_t,PREFETCHER_ACTIVE)
@@ -108,6 +118,7 @@ class cache_t {
         INSTANTIATE_GET_SET_ADD(uint32_t,POINTER_LEVELS)
         INSTANTIATE_GET_SET_ADD(uint32_t,CACHE_MANAGER_DEBUG)
         INSTANTIATE_GET_SET_ADD(uint32_t,WAIT_CYCLE)
+        INSTANTIATE_GET_SET(bool, mshr_stall)
 };
 
 #endif // CACHE_H

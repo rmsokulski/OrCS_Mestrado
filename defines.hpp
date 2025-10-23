@@ -41,6 +41,10 @@
 #define MAX_ASSEMBLY_SIZE 256    /// In general 20 is enough
 #define MAX_REGISTER_NUMBER 256
 #define MAX_MEM_OPERATIONS 256
+#define MAX_NUM_CACHE_LEVELS 5
 // ========================
+
+
+
 
 #endif // DEFINES_H

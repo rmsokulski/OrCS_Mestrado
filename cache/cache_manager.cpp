@@ -413,11 +413,21 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
                     ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) instruction_cache[i][cache_indexes[i]].id), instruction_cache[i][cache_indexes[i]].count, instruction_cache[i][cache_indexes[i]].count-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
                 #endif
                 wait_time_levels = orcs_engine.get_global_cycle() - request->sent_to_cache_level_at[i];
-                this->instruction_cache[i][cache_indexes[i]].count--;
+                this->instruction_cache[i][cache_indexes[i]].concurrent_cache_accesses--;
+
+                // -----------------------------------------------------------------------------------------
+                // Remove entry from MSHR if it was used
+                // -----------------------------------------------------------------------------------------
+                if (request->sent_to_ram || ((i+1 < MAX_NUM_CACHE_LEVELS) && request->sent_to_cache_level[i+1])) {
+                    assert(this->instruction_cache[i][cache_indexes[i]].get_mshr_occupied_entries() != 0);
+                    this->instruction_cache[i][cache_indexes[i]].mshr_occupied_entries--;
+                    this->instruction_cache[i][cache_indexes[i]].set_mshr_stall(false);
+                }
+
                 this->instruction_cache[i][cache_indexes[i]].total_per_type[request->memory_operation] += wait_time_levels;
                 if (wait_time_levels > this->instruction_cache[i][cache_indexes[i]].max_per_type[request->memory_operation]) this->instruction_cache[i][cache_indexes[i]].max_per_type[request->memory_operation] = wait_time_levels;
                 if (wait_time_levels < this->instruction_cache[i][cache_indexes[i]].min_per_type[request->memory_operation]) this->instruction_cache[i][cache_indexes[i]].min_per_type[request->memory_operation] = wait_time_levels;
-                ERROR_ASSERT_PRINTF (this->instruction_cache[i][cache_indexes[i]].count > -1, "VALUE BECOMES NEGATIVE")
+                ERROR_ASSERT_PRINTF (this->instruction_cache[i][cache_indexes[i]].concurrent_cache_accesses > -1, "VALUE BECOMES NEGATIVE")
             }
         }
 
@@ -427,11 +437,22 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
                     ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) data_cache[i][cache_indexes[i]].id), data_cache[i][cache_indexes[i]].count, data_cache[i][cache_indexes[i]].count-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
                 #endif
                 wait_time_levels = orcs_engine.get_global_cycle() - request->sent_to_cache_level_at[i];
-                this->data_cache[i][cache_indexes[i]].count--;
+                this->data_cache[i][cache_indexes[i]].concurrent_cache_accesses--;
+
+                // -----------------------------------------------------------------------------------------
+                // Remove entry from MSHR if it was used
+                // -----------------------------------------------------------------------------------------
+                if (request->sent_to_ram || ((i+1 < MAX_NUM_CACHE_LEVELS) && request->sent_to_cache_level[i+1])) {
+                    assert(this->data_cache[i][cache_indexes[i]].get_mshr_occupied_entries() != 0);
+                    this->data_cache[i][cache_indexes[i]].mshr_occupied_entries--;
+                    this->data_cache[i][cache_indexes[i]].set_mshr_stall(false);
+                }
+
+
                 this->data_cache[i][cache_indexes[i]].total_per_type[request->memory_operation] += wait_time_levels;
                 if (wait_time_levels > this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation] = wait_time_levels;
                 if (wait_time_levels < this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation] = wait_time_levels;
-                ERROR_ASSERT_PRINTF (this->data_cache[i][cache_indexes[i]].count > -1, "VALUE BECOMES NEGATIVE")
+                ERROR_ASSERT_PRINTF (this->data_cache[i][cache_indexes[i]].concurrent_cache_accesses > -1, "VALUE BECOMES NEGATIVE")
             }
         }
     } else {
@@ -441,11 +462,21 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
                     ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) data_cache[i][cache_indexes[i]].id), data_cache[i][cache_indexes[i]].count, data_cache[i][cache_indexes[i]].count-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
                 #endif
                 wait_time_levels = orcs_engine.get_global_cycle() - request->sent_to_cache_level_at[i];
-                this->data_cache[i][cache_indexes[i]].count--;
+                this->data_cache[i][cache_indexes[i]].concurrent_cache_accesses--;
+
+                // -----------------------------------------------------------------------------------------
+                // Remove entry from MSHR if it was used
+                // -----------------------------------------------------------------------------------------
+                if (request->sent_to_ram || ((i+1 < MAX_NUM_CACHE_LEVELS) && request->sent_to_cache_level[i+1])) {
+                    assert(this->data_cache[i][cache_indexes[i]].get_mshr_occupied_entries() != 0);
+                    this->data_cache[i][cache_indexes[i]].mshr_occupied_entries--;
+                    this->data_cache[i][cache_indexes[i]].set_mshr_stall(false);
+                }
+
                 this->data_cache[i][cache_indexes[i]].total_per_type[request->memory_operation] += wait_time_levels;
                 if (wait_time_levels > this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation] = wait_time_levels;
                 if (wait_time_levels < this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation] = wait_time_levels;
-                ERROR_ASSERT_PRINTF (this->data_cache[i][cache_indexes[i]].count > -1, "VALUE BECOMES NEGATIVE")
+                ERROR_ASSERT_PRINTF (this->data_cache[i][cache_indexes[i]].concurrent_cache_accesses > -1, "VALUE BECOMES NEGATIVE")
             }
         }
     }
@@ -644,10 +675,11 @@ void cache_manager_t::process (memory_package_t* request, int32_t* cache_indexes
                     // -----------------------------------------------------------------------------------------
                     // Verifica se o nível de cache tem espaço para novas requisições
                     // -----------------------------------------------------------------------------------------
-                    if (cache->count < cache->mshr_size) {
+                    if (!cache->get_mshr_stall()) {
                         #if MEMORY_DEBUG
                             ORCS_PRINTF (" sent to %s |", get_enum_cache_level_char ((cacheLevel_t) request->next_level))
                         #endif
+
                         // -----------------------------------------------------------------------------------------
                         // Faz a busca no nível de cache
                         // -----------------------------------------------------------------------------------------
@@ -766,7 +798,7 @@ uint32_t cache_manager_t::searchAddress(uint64_t instructionAddress, cache_t *ca
 
 cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t* cache, int32_t* cache_indexes){
     #if PROCESSOR_DEBUG
-        ORCS_PRINTF ("%lu Cache Manager cache_search(): memory = %lu | level = %u, type = %s, count = %u -> count = %u, %s, %lu\n", orcs_engine.get_global_cycle(), requests.size(), request->next_level, get_enum_cache_type_char ((cacheId_t) cache->id), cache->get_count(), cache->get_count()+1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
+        ORCS_PRINTF ("%lu Cache Manager cache_search(): memory = %lu | level = %u, type = %s, count = %u -> count = %u, %s, %lu\n", orcs_engine.get_global_cycle(), requests.size(), request->next_level, get_enum_cache_type_char ((cacheId_t) cache->id), cache->concurrent_cache_accesses(), cache->concurrent_cache_accesses()+1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
     #endif
 
     // -----------------------------------------------------------------------------------------
@@ -775,6 +807,13 @@ cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t
 
     uint32_t cache_status = 0, ttc = 0;
     cache_status = this->searchAddress(request->memory_address, cache, &request->cache_latency, &ttc);
+
+    // -----------------------------------------------------------------------------------------
+    // Will retry later
+    if (cache_status == MSHR_STALL) {
+        return MSHR_STALL;
+    }
+
     cache->cache_count_per_type[request->memory_operation]++;
 
     // -----------------------------------------------------------------------------------------
@@ -873,10 +912,12 @@ bool cache_manager_t::available (uint32_t processor_id, memory_operation_t op){
     switch (op){
         case MEMORY_OPERATION_READ:
         case MEMORY_OPERATION_WRITE:
-            result = this->data_cache[L1][cache_indexes[L1]].get_count() < this->data_cache[L1][cache_indexes[L1]].mshr_size;
+            result = !(this->data_cache[0][cache_indexes[0]].get_mshr_stall());
+            //result = this->data_cache[L1][cache_indexes[L1]].get_count() < this->data_cache[L1][cache_indexes[L1]].mshr_size;
         break;
         case MEMORY_OPERATION_INST:
-            result = this->instruction_cache[L1][cache_indexes[L1]].get_count() < this->instruction_cache[L1][cache_indexes[L1]].mshr_size;
+            result = !(this->instruction_cache[0][cache_indexes[0]].get_mshr_stall());
+            //result = this->instruction_cache[L1][cache_indexes[L1]].get_count() < this->instruction_cache[L1][cache_indexes[L1]].mshr_size;
         break;
         default:
             ERROR_ASSERT_PRINTF (true, "WRONG MEMORY OPERATION TYPE")
