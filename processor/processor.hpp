@@ -315,6 +315,8 @@ class processor_t {
 		
 		void commit();
 
+		void print_rob();
+
 		// ====================================================================
 		// Bool Functions @return 
 		bool isBusy();

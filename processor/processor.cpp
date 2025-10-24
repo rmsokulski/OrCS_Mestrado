@@ -4218,6 +4218,38 @@ void processor_t::printConfiguration()
 }
 
 
+void processor_t::print_rob()
+{
+	ROB_t* rob = &this->reorderBuffer;
+	uint32_t rob_size = rob->robUsed;
+
+	for (uint32_t i=0; i < rob_size; ++i) {
+		uint32_t idx = (rob->robStart + i) % rob->SIZE;
+		reorder_buffer_line_t *rob_line = &rob->reorderBuffer[idx];
+
+		if (rob_line->uop.uop_operation == INSTRUCTION_OPERATION_MEM_LOAD) {
+			ORCS_PRINTF("Opcode addr: %lu  - LOAD: ", rob_line->uop.opcode_address);
+			for (uint32_t num_mem = 0; num_mem < rob_line->uop.num_mem_operations; ++num_mem) {
+				ORCS_PRINTF("%lu ", rob_line->uop.memory_address[num_mem]);
+			}
+			ORCS_PRINTF("\n");
+		}
+		else if (rob_line->uop.uop_operation == INSTRUCTION_OPERATION_MEM_STORE) {
+			ORCS_PRINTF("Opcode addr: %lu  - STORE: ", rob_line->uop.opcode_address);
+			for (uint32_t num_mem = 0; num_mem < rob_line->uop.num_mem_operations; ++num_mem) {
+				ORCS_PRINTF("%lu ", rob_line->uop.memory_address[num_mem]);
+			}
+			ORCS_PRINTF("\n");
+		}
+		else {
+			ORCS_PRINTF("Opcode addr: %lu\n", rob_line->uop.opcode_address);
+		}
+
+	}
+
+
+}
+
 // ============================================================================
 void processor_t::clock()
 {
@@ -4235,6 +4267,11 @@ void processor_t::clock()
 		orcs_engine.hive_controller->clock();
 
 	orcs_engine.cacheManager->clock();
+
+	// TODO - debug 24/10/2025  (remover)
+	if (orcs_engine.cacheManager->print_rob) {
+		this->print_rob();
+	}
 	/////////////////////////////////////////////////
 	//// Verifica se existe coisas no ROB
 	//// CommitStage

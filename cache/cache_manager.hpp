@@ -81,6 +81,8 @@ class cache_manager_t {
         uint64_t** op_count;
         uint64_t* op_max;
 
+        bool print_rob;
+
         cache_manager_t();
         ~cache_manager_t();
         void allocate(uint32_t NUMBER_OF_PROCESSORS);

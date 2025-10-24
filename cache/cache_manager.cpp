@@ -240,6 +240,8 @@ void cache_manager_t::allocate(uint32_t NUMBER_OF_PROCESSORS) {
     this->set_sent_vima(0);
     this->set_sent_vima_cycles(0);
 
+    this->print_rob = false;
+
     this->total_latency = new uint64_t [MEMORY_OPERATION_LAST]();
     this->total_operations = new uint64_t [MEMORY_OPERATION_LAST]();
     this->min_wait_operations = new uint64_t [MEMORY_OPERATION_LAST]();
@@ -360,8 +362,69 @@ bool cache_manager_t::isIn (memory_package_t* subrequest, memory_package_t* requ
 
 void cache_manager_t::print_requests(){
     ORCS_PRINTF ("-------------%lu------------\n", orcs_engine.get_global_cycle())
+    // Inst L1
+    printf("*************************\n");
+    printf("       L1 - INST\n");
+    printf("*************************\n");
     for (size_t i = 0; i < requests.size(); i++){
-        ORCS_PRINTF ("MSHR Table entry %lu: mop %s | Addr :%lu | status %s. (flag LRU)\n", i, get_enum_memory_operation_char (requests[i]->memory_operation), requests[i]->memory_address, get_enum_package_state_char (requests[i]->status))
+        memory_package_t *request = requests[i];
+        if (request->next_level == 0 && request->type == INSTRUCTION) {
+            printf("Addr: %lu -- Inst: %lu -- Type: %s\n", request->memory_address, request->uop_number, get_enum_memory_operation_char(request->memory_operation));
+        }
+
+        //ORCS_PRINTF ("MSHR Table entry %lu: mop %s | Addr :%lu | status %s. (flag LRU)\n", i, get_enum_memory_operation_char (requests[i]->memory_operation), requests[i]->memory_address, get_enum_package_state_char (requests[i]->status))
+    }
+
+    // Data L1
+    printf("*************************\n");
+    printf("       L1 - DATA \n");
+    printf("*************************\n");
+    for (size_t i = 0; i < requests.size(); i++){
+        memory_package_t *request = requests[i];
+        if (request->next_level == 0 && request->type == DATA) {
+            printf("Addr: %lu -- Inst: %lu -- Type: %s\n", request->memory_address, request->uop_number, get_enum_memory_operation_char(request->memory_operation));
+        }
+
+        //ORCS_PRINTF ("MSHR Table entry %lu: mop %s | Addr :%lu | status %s. (flag LRU)\n", i, get_enum_memory_operation_char (requests[i]->memory_operation), requests[i]->memory_address, get_enum_package_state_char (requests[i]->status))
+    }
+
+    // L2
+    printf("*************************\n");
+    printf("       L2 \n");
+    printf("*************************\n");
+    for (size_t i = 0; i < requests.size(); i++){
+        memory_package_t *request = requests[i];
+        if (request->next_level == 1) {
+            printf("Addr: %lu -- Inst: %lu -- Type: %s\n", request->memory_address, request->uop_number, get_enum_memory_operation_char(request->memory_operation));
+        }
+
+        //ORCS_PRINTF ("MSHR Table entry %lu: mop %s | Addr :%lu | status %s. (flag LRU)\n", i, get_enum_memory_operation_char (requests[i]->memory_operation), requests[i]->memory_address, get_enum_package_state_char (requests[i]->status))
+    }
+
+    // LLC
+    printf("*************************\n");
+    printf("       LLC \n");
+    printf("*************************\n");
+    for (size_t i = 0; i < requests.size(); i++){
+        memory_package_t *request = requests[i];
+        if (request->next_level == 2) {
+            printf("Addr: %lu -- Inst: %lu -- Type: %s\n", request->memory_address, request->uop_number, get_enum_memory_operation_char(request->memory_operation));
+        }
+
+        //ORCS_PRINTF ("MSHR Table entry %lu: mop %s | Addr :%lu | status %s. (flag LRU)\n", i, get_enum_memory_operation_char (requests[i]->memory_operation), requests[i]->memory_address, get_enum_package_state_char (requests[i]->status))
+    }
+
+    // Others
+    printf("*************************\n");
+    printf("       Others \n");
+    printf("*************************\n");
+    for (size_t i = 0; i < requests.size(); i++){
+        memory_package_t *request = requests[i];
+        if (request->next_level > 2) {
+            printf("Addr: %lu -- Inst: %lu -- Type: %s\n", request->memory_address, request->uop_number, get_enum_memory_operation_char(request->memory_operation));
+        }
+
+        //ORCS_PRINTF ("MSHR Table entry %lu: mop %s | Addr :%lu | status %s. (flag LRU)\n", i, get_enum_memory_operation_char (requests[i]->memory_operation), requests[i]->memory_address, get_enum_package_state_char (requests[i]->status))
     }
 }
 
@@ -410,7 +473,7 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
         for (i = 0; i < INSTRUCTION_LEVELS; i++) {
             if (request->sent_to_cache_level[this->instruction_cache[i][cache_indexes[i]].level]) {
                 #if PROCESSOR_DEBUG
-                    ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) instruction_cache[i][cache_indexes[i]].id), instruction_cache[i][cache_indexes[i]].count, instruction_cache[i][cache_indexes[i]].count-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
+                    ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) instruction_cache[i][cache_indexes[i]].id), instruction_cache[i][cache_indexes[i]].get_concurrent_cache_accesses(), instruction_cache[i][cache_indexes[i]].get_concurrent_cache_accesses()-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
                 #endif
                 wait_time_levels = orcs_engine.get_global_cycle() - request->sent_to_cache_level_at[i];
                 this->instruction_cache[i][cache_indexes[i]].concurrent_cache_accesses--;
@@ -434,7 +497,7 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
         for (i = INSTRUCTION_LEVELS; i < request->next_level; i++) {
             if (request->sent_to_cache_level[this->data_cache[i][cache_indexes[i]].level]) {
                 #if PROCESSOR_DEBUG
-                    ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) data_cache[i][cache_indexes[i]].id), data_cache[i][cache_indexes[i]].count, data_cache[i][cache_indexes[i]].count-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
+                    ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) data_cache[i][cache_indexes[i]].id), data_cache[i][cache_indexes[i]].get_concurrent_cache_accesses(), data_cache[i][cache_indexes[i]].get_concurrent_cache_accesses()-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
                 #endif
                 wait_time_levels = orcs_engine.get_global_cycle() - request->sent_to_cache_level_at[i];
                 this->data_cache[i][cache_indexes[i]].concurrent_cache_accesses--;
@@ -459,7 +522,7 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
         for (i = 0; i < request->next_level; i++) {
             if (request->sent_to_cache_level[this->data_cache[i][cache_indexes[i]].level]){
                 #if PROCESSOR_DEBUG
-                    ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) data_cache[i][cache_indexes[i]].id), data_cache[i][cache_indexes[i]].count, data_cache[i][cache_indexes[i]].count-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
+                    ORCS_PRINTF ("%lu memory = %lu | level = %lu, type = %s, count = %u -> count = %u, %s FINISH, %lu\n", orcs_engine.get_global_cycle(), (*requests_list).size(), i, get_enum_cache_type_char ((cacheId_t) data_cache[i][cache_indexes[i]].id), data_cache[i][cache_indexes[i]].get_concurrent_cache_accesses(), data_cache[i][cache_indexes[i]].get_concurrent_cache_accesses()-1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
                 #endif
                 wait_time_levels = orcs_engine.get_global_cycle() - request->sent_to_cache_level_at[i];
                 this->data_cache[i][cache_indexes[i]].concurrent_cache_accesses--;
@@ -684,6 +747,12 @@ void cache_manager_t::process (memory_package_t* request, int32_t* cache_indexes
                         // Faz a busca no nível de cache
                         // -----------------------------------------------------------------------------------------
                         this->cache_search (request, cache, cache_indexes);
+
+                        // Debug // TODO - Interessante para ver como stores ficam estacados depois do commit de suas uops..
+                        // if (cache->get_concurrent_cache_accesses() >= 30) {
+                        //     print_requests();
+                        //     this->print_rob = true;
+                        // }
                     }
                 }
             }
@@ -798,7 +867,7 @@ uint32_t cache_manager_t::searchAddress(uint64_t instructionAddress, cache_t *ca
 
 cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t* cache, int32_t* cache_indexes){
     #if PROCESSOR_DEBUG
-        ORCS_PRINTF ("%lu Cache Manager cache_search(): memory = %lu | level = %u, type = %s, count = %u -> count = %u, %s, %lu\n", orcs_engine.get_global_cycle(), requests.size(), request->next_level, get_enum_cache_type_char ((cacheId_t) cache->id), cache->concurrent_cache_accesses(), cache->concurrent_cache_accesses()+1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
+        ORCS_PRINTF ("%lu Cache Manager cache_search(): memory = %lu | level = %u, type = %s, count = %u -> count = %u, %s, %lu\n", orcs_engine.get_global_cycle(), requests.size(), request->next_level, get_enum_cache_type_char ((cacheId_t) cache->id), cache->get_concurrent_cache_accesses(), cache->get_concurrent_cache_accesses()+1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
     #endif
 
     // -----------------------------------------------------------------------------------------
