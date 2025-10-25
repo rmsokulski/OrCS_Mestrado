@@ -749,7 +749,7 @@ void cache_manager_t::process (memory_package_t* request, int32_t* cache_indexes
                         this->cache_search (request, cache, cache_indexes);
 
                         // Debug // TODO - Interessante para ver como stores ficam estacados depois do commit de suas uops..
-                        // if (cache->get_concurrent_cache_accesses() >= 30) {
+                        // if (cache->get_concurrent_cache_accesses() >= 10) {
                         //     print_requests();
                         //     this->print_rob = true;
                         // }
@@ -970,6 +970,14 @@ cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t
     #endif
     request->updatePackageUntreated(ttc);
     request->next_level++;
+
+    // -----------------------------------------------------------------------------------------
+    // Quando ocorre um miss para a escrita, suas próximas requisições devem carregar o dado
+    // Isso não dá problema com WB porque ele só cria uma requisição quando vai para a DRAM
+    // -----------------------------------------------------------------------------------------
+    if (request->memory_operation == MEMORY_OPERATION_WRITE) {
+        request->is_load_from_write = true;
+    }
     cache->cache_miss_per_type[request->memory_operation]++;
     return MISS;
 }

@@ -377,6 +377,10 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
             subrequest->num_subrequests = 0;
             request->num_subrequests++;
 
+            if (request->is_load_from_write) {
+                subrequest->memory_operation = MEMORY_OPERATION_READ;
+            }
+
             subrequest->memory_address = base_address;
             subrequest->memory_size = BANK_ROW_BUFFER_SIZE;
             base_address += BANK_ROW_BUFFER_SIZE; // For the next subrequest

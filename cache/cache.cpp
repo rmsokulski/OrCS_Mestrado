@@ -253,6 +253,7 @@ inline void cache_t::writeBack(line_t *line, uint32_t processor_id, uint64_t mem
 	// aqui vai dar erro :p
     for (uint32_t i = this->level + 1; i < DATA_LEVELS - 1; i++) {
         ERROR_ASSERT_PRINTF(line->line_ptr_caches[processor_id][i] != NULL, "Error, no line reference in next levels.")
+		// Problema JAVAN pode ser detectado aqui.
     }
 	// L1 writeBack issues
 	if ((this->level == 0) && (this->level != DATA_LEVELS - 1)) {
@@ -263,11 +264,19 @@ inline void cache_t::writeBack(line_t *line, uint32_t processor_id, uint64_t mem
 		line->clean_line();
 	// LLC writeBack issues
     } else if (this->level == DATA_LEVELS - 1) {
+		// ********************************************************************************
+		// Clear all upper levels with this address
+		// ********************************************************************************
+
 		for (uint32_t i = 0; i < DATA_LEVELS - 1; i++) {
 			if (line->line_ptr_caches[processor_id][i] != NULL) {
 				line->line_ptr_caches[processor_id][i]->clean_line();
 			}
 		}
+
+		// *****************************************************************************
+		// Make a write back request to DRAM
+		// *****************************************************************************
 		memory_package_t* request = new memory_package_t();
     	request->processor_id = processor_id;
       	request->memory_address = memory_address;
@@ -279,20 +288,13 @@ inline void cache_t::writeBack(line_t *line, uint32_t processor_id, uint64_t mem
       	request->readyAt = orcs_engine.get_global_cycle();
       	request->born_cycle = orcs_engine.get_global_cycle();
       	request->sent_to_ram = false;
-      	request->type = INSTRUCTION;
+      	request->type = DATA;
       	request->op_count[request->memory_operation]++;
     	orcs_engine.memory_controller->requestDRAM(request);
 	// Intermediate cache levels issues
 	} else {
 		uint32_t i = 0;
-		// for (i = 0; i < this->level - 1; i++) {
-        //     // printf("%s\n", "for");
-		// 	if (line->line_ptr_caches[0][i] != NULL) {
-        //         // printf("%s\n", "if");mshr_entry_t* add_mshr_entry(memory_order_buffer_line_t* mob_line, uint64_t latency_request);
-        
-		// 		copyLevels(line, i, i + 1);
-		// 	}
-		// }
+
         if (line->line_ptr_caches[processor_id][i] != NULL) {
 			copyLevels(line, i, i + 2, processor_id);
 		} else {

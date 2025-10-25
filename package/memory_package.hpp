@@ -38,6 +38,10 @@ class memory_package_t {
         uint64_t* op_count;
         uint32_t latency;
 
+        // Request of data made when you have a cache miss for a write instruction
+        // This info will be used to guide the type of request created in the DRAM.
+        bool is_load_from_write; 
+
         // Request many Cache Lines
         std::vector<memory_package_t *> subrequest_from; // This is a subrequest package inside a Cache Level or DRAM
         uint32_t num_subrequests; // This package generated some subrequests. This is the number used to track the ones still in flight

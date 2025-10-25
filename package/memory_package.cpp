@@ -44,6 +44,8 @@ memory_package_t::memory_package_t() {
     this->subrequest_from = std::vector<memory_package_t*>();
     this->num_subrequests = 0;
 
+    this->is_load_from_write = false;
+
     memory_operation = MEMORY_OPERATION_LAST;    /// memory operation
 }
 
@@ -220,6 +222,8 @@ void memory_package_t::package_clean() {
     this->subrequest_from = std::vector<memory_package_t*>();
     this->num_subrequests = 0;
 
+    this->is_load_from_write = false;
+
     memory_operation = MEMORY_OPERATION_LAST;    /// memory operation
 }
 
@@ -266,6 +270,8 @@ void memory_package_t::copy(memory_package_t *other) {
     this->latency    = other->latency;
 
     memory_operation = other->memory_operation;    /// memory operation
+
+    this->is_load_from_write = other->is_load_from_write;
 
     // This must not be copied!
     // this->subrequest_from = std::vector<memory_package_t*>();
