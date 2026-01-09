@@ -31,14 +31,16 @@ void read_callback() {
     requests_sent--;
 }
 
-void send_request(bool is_read_request, int64_t memory_address, int context_id) {
+void send_request(bool is_read_request, int64_t memory_address, int context_id, memory_controller_t *mem_ctrl) {
     if (is_read_request) {
       printf("Receiving read request...");
-    bool enqueue_success = ramulator2_frontend->receive_external_requests(0, memory_address, context_id, [](Ramulator::Request& req) {
-      (void) req;
+      bool enqueue_success = ramulator2_frontend->receive_external_requests(0, memory_address, context_id, [mem_ctrl](Ramulator::Request& req) {
       // your read request callback 
       printf("Callback received!");
-      read_callback();
+      uint64_t addr = (uint64_t)req.addr;
+      memory_operation_t mem_op = (req.type_id == 0) ? MEMORY_OPERATION_READ : MEMORY_OPERATION_WRITE;
+      uint32_t source_core = req.source_id;
+      mem_ctrl->request_finished(addr, mem_op, source_core);
     });
 
   if (enqueue_success) {
@@ -51,7 +53,7 @@ void send_request(bool is_read_request, int64_t memory_address, int context_id) 
 }
 }
 
-void my_simulator_finish() {
+void ramulator_statistics_and_finish() {
   ramulator2_frontend->finalize();
   ramulator2_memorysystem->finalize();
 }

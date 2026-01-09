@@ -1,9 +1,13 @@
+#ifndef __RAMULATOR_WRAPPER__
+#define __RAMULATOR_WRAPPER__
 #include "ramulator_lib/base/base.h"
 #include "ramulator_lib/base/request.h"
 #include "ramulator_lib/base/config.h"
 #include "ramulator_lib/frontend/frontend.h"
 #include "ramulator_lib/memory_system/memory_system.h"
 #include <string>
+#include "simulator.hpp"
+
 
 extern int requests_sent;
 
@@ -20,6 +24,8 @@ int get_clock_ratio();
 
 void read_callback();
 
-void send_request(bool is_read_request, int64_t memory_address, int context_id);
+void send_request(bool is_read_request, int64_t memory_address, int context_id, memory_controller_t *mem_ctrl);
 
-void my_simulator_finish();
+void ramulator_statistics_and_finish();
+
+#endif

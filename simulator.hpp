@@ -197,6 +197,7 @@ extern orcs_engine_t orcs_engine;
 // // MemoryController INCLUDES
 #include "./main_memory/memory_channel.hpp"
 #include "./main_memory/memory_controller.hpp"
+#include "./ramulator_wrapper.h"
 //  =========================================//
 // // HIVE INCLUDES
 #include "./hive/hive_controller.hpp"
@@ -205,5 +206,6 @@ extern orcs_engine_t orcs_engine;
 #include "./vima/vima_controller.hpp"
 #include "./vima/vima_vector.hpp"
 //  =========================================//
+
 
 #endif  // _ORCS_ORCS_HPP_

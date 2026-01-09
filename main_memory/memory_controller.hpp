@@ -77,6 +77,9 @@ class memory_controller_t{
         uint64_t i;
 
     public:
+        // Type of memory simulation
+        bool use_ramulator;
+        bool use_orcs;
         // ==========================================================================
         // Memory Controller Atributes
         // ==========================================================================
@@ -112,6 +115,9 @@ class memory_controller_t{
         void reset_statistics();
         void set_masks();
         uint64_t requestDRAM (memory_package_t* request);
+
+        // Ramulator
+        void request_finished(uint64_t addr, memory_operation_t mem_op, uint32_t source_core);
         //statistiscs methods
         INSTANTIATE_GET_SET_ADD(uint64_t,requests_made)
         INSTANTIATE_GET_SET_ADD(uint64_t,sub_requests_made)
