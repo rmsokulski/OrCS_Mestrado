@@ -119,8 +119,8 @@ std::string uop_package_t::content_to_string() {
     content_string = content_string + " " + get_enum_instruction_operation_char(this->uop_operation);
 
     for (uint32_t i = 0; i < num_mem_operations; ++i){
-        content_string = content_string + " Address[" + utils_t::uint32_to_string(i); + "]: $" + utils_t::big_uint64_to_string(this->memory_address[i]);
-        content_string = content_string + " Size[" + utils_t::uint32_to_string(i); + "]:" + utils_t::uint32_to_string(this->memory_size[i]);
+        content_string = content_string + " Address[" + utils_t::uint32_to_string(i) + "]: $" + utils_t::big_uint64_to_string(this->memory_address[i]);
+        content_string = content_string + " Size[" + utils_t::uint32_to_string(i) + "]:" + utils_t::uint32_to_string(this->memory_size[i]);
     }
 
     content_string = content_string + " | RRegs[";

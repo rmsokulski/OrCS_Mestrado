@@ -6,7 +6,8 @@ CPPFLAGS = $(FLAGS)
 BIN_NAME = orcs
 RM = rm -f
 
-FLAGS =   -ggdb3 -g -Wall -Wextra -Werror -std=c++0x -lefence -O1 -pedantic -fsanitize=leak -Wno-stringop-truncation -lefence
+#FLAGS = -ggdb3 -g -std=c++17 -lefence -O1 -Wno-stringop-truncation -lefence 
+FLAGS =   -ggdb3 -g -Wall -Wextra -Werror -std=c++17 -lefence -O1 -pedantic -fsanitize=leak -Wno-stringop-truncation -lefence 
 LDFLAGS = -ggdb3
 ########################################################################
 ##FOLDERS
@@ -27,7 +28,7 @@ FD_DISAMBIGUATION = memory_disambiguation
 
 
 ###
-LIBRARY = -lz -lconfig++
+LIBRARY = -lz -lconfig++  -L./ramulator_lib -lramulator -lfmt -Wl,-rpath,'$$ORIGIN/ramulator_lib'
 
 SRC_PACKAGE = 		$(FD_PACKAGE)/opcode_package.cpp\
 					$(FD_PACKAGE)/uop_package.cpp\
@@ -56,7 +57,8 @@ SRC_PREFETCHER = $(FD_PREFETCHER)/prefetcher.cpp\
 
 SRC_MEMORY = $(FD_MEMORY)/memory_channel.cpp\
 			 $(FD_MEMORY)/memory_controller.cpp\
-			 $(FD_MEMORY)/memory_request_client.cpp
+			 $(FD_MEMORY)/memory_request_client.cpp\
+			 ramulator_wrapper.cpp
 
 SRC_HIVE = $(FD_HIVE)/hive_controller.cpp
 
