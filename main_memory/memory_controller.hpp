@@ -76,6 +76,12 @@ class memory_controller_t{
 
         uint64_t i;
 
+        // Ramulator syncronization variables
+        double memory_cpu_ratio; // Used for accounting when each memory cycle (Ramulator2) will happen
+        double memory_frequency_mhz;
+        double cpu_frequency_mhz;
+        double cycles_accumulated; // Fraction of memory cycle accumulated in the last CPU cycles
+
     public:
         // Type of memory simulation
         bool use_ramulator;

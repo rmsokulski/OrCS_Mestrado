@@ -1,0 +1,88 @@
+Creating INST cache of level 0, I_LEVELS: 1, D_LEVELS: 3
+Creating DATA cache of level 0, I_LEVELS: 1, D_LEVELS: 3
+Creating DATA cache of level 1, I_LEVELS: 1, D_LEVELS: 3
+Creating DATA cache of level 2, I_LEVELS: 1, D_LEVELS: 3
+Using ramulator memory system (USE_RAMULATOR == 1)!
+Frequencies Loaded: CPU 2400.000000 MHz, MEM 800.000000 MHz
+Using configuration ramulator_lib/config.yaml for ramulator..
+Ramulator memory system configured!
+==========================================================================
+Active Cores: 1 of 1
+Opcodes Processed: 0 of 117875
+Total Progress   0.0000%
+Global IPC(-nan)
+Global ETC(-nan:-nan:-nan)
+==========================================================================
+======================Processor 1 of 1===============================
+Benchmark ../Traces/hello_world
+Actual Cycle 0
+Opcodes Processed: 0 of 117875
+Instructions Fetched/Instructions Total: 0 of 117874
+Uops Completed/Uops decoded: 0 of 1
+Total Progress   0.0000%
+IPC(-nan)
+ETC(-nan:-nan:-nan)
+KIPS(-nan)
+Elapsed Time (00:00:00)
+==========================================================================
+
+==========================================================================
+Active Cores: 1 of 1
+Opcodes Processed: 40 of 117875
+Total Progress   0.0339%
+Global IPC(0.000400)
+Global ETC(00:00:00)
+==========================================================================
+======================Processor 1 of 1===============================
+Benchmark ../Traces/hello_world
+Actual Cycle 100000
+Opcodes Processed: 40 of 117875
+Instructions Fetched/Instructions Total: 40 of 117874
+Uops Completed/Uops decoded: 0 of 1
+Total Progress   0.0339%
+IPC(0.000400)
+ETC(00:00:00)
+KIPS(inf)
+Elapsed Time (00:00:00)
+==========================================================================
+
+==========================================================================
+Active Cores: 1 of 1
+Opcodes Processed: 40 of 117875
+Total Progress   0.0339%
+Global IPC(0.000200)
+Global ETC(00:00:00)
+==========================================================================
+======================Processor 1 of 1===============================
+Benchmark ../Traces/hello_world
+Actual Cycle 200000
+Opcodes Processed: 40 of 117875
+Instructions Fetched/Instructions Total: 40 of 117874
+Uops Completed/Uops decoded: 0 of 1
+Total Progress   0.0339%
+IPC(0.000200)
+ETC(00:00:00)
+KIPS(inf)
+Elapsed Time (00:00:00)
+==========================================================================
+
+==========================================================================
+Active Cores: 1 of 1
+Opcodes Processed: 40 of 117875
+Total Progress   0.0339%
+Global IPC(0.000133)
+Global ETC(00:00:00)
+==========================================================================
+======================Processor 1 of 1===============================
+Benchmark ../Traces/hello_world
+Actual Cycle 300000
+Opcodes Processed: 40 of 117875
+Instructions Fetched/Instructions Total: 40 of 117874
+Uops Completed/Uops decoded: 0 of 1
+Total Progress   0.0339%
+IPC(0.000133)
+ETC(00:00:00)
+KIPS(inf)
+Elapsed Time (00:00:00)
+==========================================================================
+

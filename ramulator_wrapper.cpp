@@ -23,34 +23,64 @@ int get_clock_ratio() {
 }
 
 void send_tick() {
+  ramulator2_frontend->tick();
   ramulator2_memorysystem->tick();
+
 }
 
-void read_callback() {
-    printf("Read completed! - %f\n", get_memory_tCK());
-    requests_sent--;
-}
+// context_id iditifies which core is sending the request (https://github.com/CMU-SAFARI/ramulator2/blob/main/src/base/request.h)
+bool send_request(bool is_read_request, int64_t memory_address, int context_id, memory_controller_t *mem_ctrl) {
+    // 1. Determine the request type based on Ramulator 2's specific type IDs
+    // 0 is Read and 1 is Write
+    int req_type = is_read_request ? 0 : 1; 
 
-void send_request(bool is_read_request, int64_t memory_address, int context_id, memory_controller_t *mem_ctrl) {
-    if (is_read_request) {
-      printf("Receiving read request...");
-      bool enqueue_success = ramulator2_frontend->receive_external_requests(0, memory_address, context_id, [mem_ctrl](Ramulator::Request& req) {
-      // your read request callback 
-      printf("Callback received!");
-      uint64_t addr = (uint64_t)req.addr;
-      memory_operation_t mem_op = (req.type_id == 0) ? MEMORY_OPERATION_READ : MEMORY_OPERATION_WRITE;
-      uint32_t source_core = req.source_id;
-      mem_ctrl->request_finished(addr, mem_op, source_core);
-    });
 
-  if (enqueue_success) {
-    // What happens if the memory request is accepted by Ramulator 2.0
-    printf("Ramulator received the request!\n");
-  } else {
-    // What happens if the memory request is rejected by Ramulator 2.0 (e.g., request queue full)
-    printf("Ramulator requested the request!\n");
-  }
-}
+    // 2. Attempt to enqueue the request
+    bool enqueue_success = ramulator2_frontend->receive_external_requests(
+        req_type, 
+        memory_address, 
+        context_id, 
+        [mem_ctrl](Ramulator::Request& req) {
+            // --- CALLBACK LOGIC (Executes when DRAM finishes) ---
+            uint64_t addr = (uint64_t)req.addr;
+            
+            // Map Ramulator type back to OrCS type
+            memory_operation_t mem_op = (req.type_id == 0) ? 
+                                         MEMORY_OPERATION_READ : 
+                                         MEMORY_OPERATION_WRITE;
+            
+            uint32_t source_core = req.source_id;
+
+            #if MEMORY_DEBUG
+            printf("[RAMULATOR2] Callback for Addr: %lu\n", addr);
+            printf("Ramulator request finished!\n");
+            #endif
+
+            // Notify the memory controller that this specific address is done
+            mem_ctrl->request_finished(addr, mem_op, source_core);
+        }
+    );
+
+    // Manually calling the callback for writes (Ramulator never calls)
+    if (is_read_request == false && enqueue_success) {
+      
+      #if MEMORY_DEBUG
+      printf("[RAMULATOR2] Callback for Addr: %lu\n", addr);
+      printf("Ramulator request finished!\n");
+      #endif
+
+      mem_ctrl->request_finished(memory_address, MEMORY_OPERATION_WRITE, context_id);
+    }
+
+
+    //printf("Enqueue success: %s\n", enqueue_success ? "true" : "false");
+    // 3. Return the status to OrCS
+    if (!enqueue_success) {
+        // If Ramulator is full, OrCS needs to know
+        return false;
+    }
+
+    return true;
 }
 
 void ramulator_statistics_and_finish() {

@@ -22,9 +22,7 @@ float get_memory_tCK();
 
 int get_clock_ratio();
 
-void read_callback();
-
-void send_request(bool is_read_request, int64_t memory_address, int context_id, memory_controller_t *mem_ctrl);
+bool send_request(bool is_read_request, int64_t memory_address, int context_id, memory_controller_t *mem_ctrl);
 
 void ramulator_statistics_and_finish();
 

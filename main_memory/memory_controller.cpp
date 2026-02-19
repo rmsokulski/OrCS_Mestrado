@@ -90,6 +90,27 @@ void memory_controller_t::allocate() {
             printf("Using ramulator memory system (USE_RAMULATOR == 1)!\n");
             this->use_ramulator = true;
             this->use_orcs = false;
+
+            // Calculate the ratio (how many Mem ticks per CPU tick)
+            // Ratio is usually < 1.0 (e.g., 800/3200 = 0.25)
+            // 1. Check for CPU Frequency
+            if (!cfg_root.lookupValue("cpu_frequency_mhz", this->cpu_frequency_mhz)) {
+                fprintf(stderr, "ERROR: 'cpu_frequency_mhz' not found in configuration file!\n");
+                exit(1);
+            }
+
+            // 2. Check for Memory Frequency
+            if (!cfg_root.lookupValue("memory_frequency_mhz", this->memory_frequency_mhz)) {
+                fprintf(stderr, "ERROR: 'memory_frequency_mhz' not found in configuration file!\n");
+                exit(1);
+            }
+
+            // Optional: Debug print to confirm values are loaded
+            printf("Frequencies Loaded: CPU %lf MHz, MEM %lf MHz\n", 
+                    this->cpu_frequency_mhz, this->memory_frequency_mhz);
+            this->memory_cpu_ratio = this->memory_frequency_mhz / this->cpu_frequency_mhz;
+            this->cycles_accumulated = 0.0;
+            
         }
     }
 
@@ -278,7 +299,7 @@ void memory_controller_t::reset_statistics(){
 // Returns OK if there is still a requisition to be finished
 bool memory_controller_t::isBusy(){
     if (use_ramulator) {
-        printf("TO IMPLEMENT: isBusy with ramulator2\n");
+        if (working.size() != 0) return true;
     }
     if (use_orcs) {
         if (working.size() != 0) return true;
@@ -290,7 +311,18 @@ void memory_controller_t::request_finished(uint64_t addr, memory_operation_t mem
     // uint64_t addr = (uint64_t)req.addr;
     // memory_operation_t mem_op = (req.type_id == 0) ? MEMORY_OPERATION_READ : MEMORY_OPERATION_WRITE;
     // uint32_t source_core = req.source_id;
+    #if MEMORY_DEBUG
+    printf("[MEM_CTRL] Sub-request finished: Addr %lu, Op %d, Core %u at cycle %lu\n", 
+                    addr, mem_op, source_core, orcs_engine.get_global_cycle());
+    #endif
+    ERROR_ASSERT_PRINTF(subrequests_on_track > 0, "Subrequests on track below zero!!\n");
+
     subrequests_on_track--;
+    
+    // 1. Debug Print
+    printf("[CALLBACK RECEIVED] Addr: %lu, Op: %d, Core: %u\n", addr, mem_op, source_core);
+
+
 
     for (i = 0; i < working.size(); i++) {
         if (working[i]->memory_operation == mem_op &&
@@ -298,11 +330,21 @@ void memory_controller_t::request_finished(uint64_t addr, memory_operation_t mem
             working[i]->processor_id == source_core) {
                 // Requisição completa
                 working[i]->updatePackageDRAMReady(0);
+                printf("Set to ready!\n");
                 return;
             }
     }
-    printf("memory_controller_t::request_finished - REQUEST NOT FOUND!!\n");
-    exit(1);
+    
+    // 3. Fallback: If no match was found, print the vector to see what went wrong
+    printf("ERROR: Match NOT found. Printing working vector for comparison:\n");
+    for (uint32_t j = 0; j < working.size(); j++) {
+        printf("  - Target [%u] Addr: %lu, Op: %d, Core: %u\n", 
+                j, working[j]->memory_address, working[j]->memory_operation, working[j]->processor_id);
+    }
+
+    #if MEMORY_DEBUG
+    printf("memory_controller_t::request_finished\n");
+    #endif
 
 }
 
@@ -312,18 +354,31 @@ void memory_controller_t::clock(){
     // ************************************************************************
     // Sending clock to the memory
     // ************************************************************************
-    if (use_ramulator) { // TODO: adjust to the correct frequency!
-        send_tick();
-        if (subrequests_on_track > 0) printf("Waiting for %u sub-requests on track\n", subrequests_on_track);
-        if (working.size() > 0) printf("Waiting for %ld sub-requests\n", working.size());
-            if (ongoing_requests.size() > 0) {
-                printf("Waiting for %ld ongoing requests\n", ongoing_requests.size());
-                for (uint32_t i=0; i < ongoing_requests.size(); ++i) {
-                    printf("%lu\n", ongoing_requests[i]->memory_address);
-                    printf("   waiting for %u subrequests!\n", ongoing_requests[i]->num_subrequests);
-                }
+    if (use_ramulator) {  
+        // 1. Accumulate the "fractional" memory cycle for this CPU tick
+        this->cycles_accumulated += this->memory_cpu_ratio;
 
+        // 2. Tick Ramulator as many times as needed to "catch up"
+        // While accumulation is >= 1, it means at least one DRAM cycle has passed
+        while (this->cycles_accumulated >= 1.0) {
+            if (use_ramulator) {
+                 send_tick(); 
+            }
+            this->cycles_accumulated -= 1.0;
         }
+        //printf("subrequests_on_track: %d\n", subrequests_on_track);
+
+        // 3. Log
+//       if (subrequests_on_track > 0) printf("Waiting for %u sub-requests on track\n", subrequests_on_track);
+//       if (working.size() > 0) printf("Waiting for %ld sub-requests\n", working.size());
+//           if (ongoing_requests.size() > 0) {
+//               printf("Waiting for %ld ongoing requests\n", ongoing_requests.size());
+//               for (uint32_t i=0; i < ongoing_requests.size(); ++i) {
+//                   printf("%lu\n", ongoing_requests[i]->memory_address);
+//                   printf("   waiting for %u subrequests!\n", ongoing_requests[i]->num_subrequests);
+//               }
+
+//       }
         
         
         
@@ -350,21 +405,24 @@ void memory_controller_t::clock(){
             if (use_ramulator) {
                 // -----------------------------------------------------------------------------------------
                 // Envia essa requisição para o ramulator
+                // Se ele rejeitar, tenta no próximo ciclo
                 // -----------------------------------------------------------------------------------------
-                send_request((working[i]->memory_operation == MEMORY_OPERATION_READ), working[i]->memory_address, working[i]->processor_id, this);
-                subrequests_on_track++;
+
+                subrequests_on_track++; // Deixar aqui para evitar ficar negativo em stores que concluem imediatamente...
+                if(!send_request((working[i]->memory_operation == MEMORY_OPERATION_READ), working[i]->memory_address, working[i]->processor_id, this)) {
+                  subrequests_on_track--; // Se não conseguiu enviar, reduz o valor novamente
+                }
             }
             
             if (use_orcs) {
                 // -----------------------------------------------------------------------------------------
                 // Envia essa requisição ao canal de memória correto
                 // -----------------------------------------------------------------------------------------
-                if (this->channels[get_channel (working[i]->memory_address)].addRequest (working[i])) {
+
                     working[i]->ram_cycle = orcs_engine.get_global_cycle();
                     working[i]->updatePackageDRAMFetch (0);
                 }
             }
-        }
         // -----------------------------------------------------------------------------------------
         // Se já foi buscada e os dados estão prontos
         // -----------------------------------------------------------------------------------------
@@ -392,7 +450,7 @@ void memory_controller_t::clock(){
             #endif
 
             working[i]->subrequest_from[0]->num_subrequests--;
-            printf("Remaining subrequests for requisition: %u\n", working[i]->subrequest_from[0]->num_subrequests);
+            //printf("Remaining subrequests for requisition: %u\n", working[i]->subrequest_from[0]->num_subrequests);
 
             if (working[i]->subrequest_from[0]->num_subrequests == 0) {
                 working[i]->subrequest_from[0]->updatePackageWait (this->cache_line_latency_burst);
@@ -408,7 +466,7 @@ void memory_controller_t::clock(){
             // -----------------------------------------------------------------------------------------
             // Libera a subrequisição e remove da lista de requisições
             // -----------------------------------------------------------------------------------------
-            printf("Removing sub-request\n");
+            //printf("Removing sub-request\n");
             delete working[i];
             working.erase(std::remove(working.begin(), working.end(), working[i]), working.end());
             working.shrink_to_fit();
@@ -489,7 +547,7 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
         #endif
 
         ongoing_requests.push_back(request);
-        printf("Adding main request, now with %ld ongoing requests and %ld subrequests\n", ongoing_requests.size(), working.size());
+        //printf("Adding main request, now with %ld ongoing requests and %ld subrequests\n", ongoing_requests.size(), working.size());
 
         if (use_ramulator) {
             memory_package_t *subrequest = new memory_package_t();
@@ -501,6 +559,14 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
             if (request->is_load_from_write) {
                 subrequest->memory_operation = MEMORY_OPERATION_READ;
             }
+          
+            if (request->memory_operation == MEMORY_OPERATION_INST) {
+              subrequest->memory_operation = MEMORY_OPERATION_READ;
+            }
+
+            ERROR_ASSERT_PRINTF (subrequest->memory_operation == MEMORY_OPERATION_READ || subrequest->memory_operation == MEMORY_OPERATION_WRITE, "Memory operation type in memory different from READ/WRITE: %d\n", subrequest->memory_operation);
+
+
 
             subrequest->memory_address = request->memory_address;
             subrequest->memory_size = request->memory_size;
@@ -512,7 +578,7 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
             this->add_sub_requests_made();
             this->working.push_back (subrequest);
             this->working.shrink_to_fit();
-            printf("Adding subrequests, now with %ld ongoing requests and %ld subrequests\n", ongoing_requests.size(), working.size());
+            //printf("Adding subrequests, now with %ld ongoing requests and %ld subrequests\n", ongoing_requests.size(), working.size());
         }
 
         if (use_orcs) {
@@ -535,9 +601,9 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
             // *********************************************************************
             uint32_t num_subrequests = ceil((loaded_bytes + 0.0f) / minimum_unit);
 
-            printf("Generating %u subrequests...\n", num_subrequests);
-            printf("Memory address and size: %lu and %u\n", request->memory_address, request->memory_size);
-            printf("Base address and Loaded bytes: %lu and %lu\n", base_address, loaded_bytes);
+            //printf("Generating %u subrequests...\n", num_subrequests);
+            //printf("Memory address and size: %lu and %u\n", request->memory_address, request->memory_size);
+            //printf("Base address and Loaded bytes: %lu and %lu\n", base_address, loaded_bytes);
 
             for (uint32_t i=0; i < num_subrequests; ++i) {
                 memory_package_t *subrequest = new memory_package_t();
@@ -548,6 +614,10 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
 
                 if (request->is_load_from_write) {
                     subrequest->memory_operation = MEMORY_OPERATION_READ;
+                }
+
+                if (request->memory_operation == MEMORY_OPERATION_INST) {
+                  subrequest->memory_operation = MEMORY_OPERATION_READ;
                 }
 
                 subrequest->memory_address = base_address;
@@ -561,7 +631,7 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
                 this->add_sub_requests_made();
                 this->working.push_back (subrequest);
                 this->working.shrink_to_fit();
-                printf("Adding subrequests, now with %ld ongoing requests and %ld subrequests\n", ongoing_requests.size(), working.size());
+                //printf("Adding subrequests, now with %ld ongoing requests and %ld subrequests\n", ongoing_requests.size(), working.size());
 
             }
         }

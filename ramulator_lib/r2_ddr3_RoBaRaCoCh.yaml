@@ -1,0 +1,42 @@
+Frontend:
+  impl: GEM5
+  # O tamanho da transação geralmente é cache line size (64 bytes)
+  # O gem5 gerencia o clock, mas o clock_ratio pode ser usado para sincronia interna
+
+MemorySystem:
+  impl: GenericDRAM
+  clock_ratio: 3 # Razão entre clock da CPU e Memória (ex: 3:1)
+  AddrMapper:
+    impl: RoBaRaCoCh  
+  DRAM:
+    impl: DDR3
+    org:
+      preset: DDR3_4Gb_x8
+      channel: 1
+      rank: 1
+    timing:
+      preset: DDR3_1600J # Meio termo entre H e K
+      
+  Controller:
+    impl: Generic
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+      cap: 4
+    plugins:
+      # - ControllerPlugin:
+      #     impl: TraceRecorder
+      #     path: ./output_trace.txt
+      - ControllerPlugin:
+          impl: CommandCounter
+          path: ./cmd_counts.csv
+          commands_to_count:
+            - ACT
+            - PRE
+            - RD
+            - WR
+            - PRE
+            - PREA
