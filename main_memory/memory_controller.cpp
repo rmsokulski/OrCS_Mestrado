@@ -58,8 +58,8 @@ memory_controller_t::memory_controller_t(){
 }
 // ============================================================================
 memory_controller_t::~memory_controller_t(){
-    if (use_ramulator) { // TODO
-
+    if (use_ramulator) { 
+      // Already calling for the statistics -- Nothing here...
     }
 
 
@@ -133,6 +133,13 @@ void memory_controller_t::allocate() {
         printf("Ramulator memory system configured!\n");
     }
 
+    // Shared Statistics
+    this->total_latency = new uint64_t [MEMORY_OPERATION_LAST]();
+    this->total_operations = new uint64_t [MEMORY_OPERATION_LAST]();
+    printf("Total operation vector allocated with %d entries\n", MEMORY_OPERATION_LAST);
+    this->min_wait_operations = new uint64_t [MEMORY_OPERATION_LAST]();
+    for (i = 0; i < MEMORY_OPERATION_LAST; i++) this->min_wait_operations[i] = UINT64_MAX;
+    this->max_wait_operations = new uint64_t [MEMORY_OPERATION_LAST]();
 
     // Configure the OrCS memory system simulation
     if (!use_orcs) {
@@ -180,11 +187,6 @@ void memory_controller_t::allocate() {
     printf("MEMORY_CONTROLLER_T::set_latency_burst (For channel and banks usage)= %lu\n", this->latency_burst);
     printf("MEMORY_CONTROLLER_T::set_cache_line_latency_burst (for cache installation) = %lu\n", this->cache_line_latency_burst);
     
-    this->total_latency = new uint64_t [MEMORY_OPERATION_LAST]();
-    this->total_operations = new uint64_t [MEMORY_OPERATION_LAST]();
-    this->min_wait_operations = new uint64_t [MEMORY_OPERATION_LAST]();
-    for (i = 0; i < MEMORY_OPERATION_LAST; i++) this->min_wait_operations[i] = UINT64_MAX;
-    this->max_wait_operations = new uint64_t [MEMORY_OPERATION_LAST]();
 
     set_TIMING_AL (cfg_memory_ctrl["TIMING_AL"]);     // Added Latency for column accesses
     set_TIMING_CAS (cfg_memory_ctrl["TIMING_CAS"]);    // Column Access Strobe (CL]) latency
@@ -319,10 +321,6 @@ void memory_controller_t::request_finished(uint64_t addr, memory_operation_t mem
 
     subrequests_on_track--;
     
-    // 1. Debug Print
-    printf("[CALLBACK RECEIVED] Addr: %lu, Op: %d, Core: %u\n", addr, mem_op, source_core);
-
-
 
     for (i = 0; i < working.size(); i++) {
         if (working[i]->memory_operation == mem_op &&
@@ -330,7 +328,6 @@ void memory_controller_t::request_finished(uint64_t addr, memory_operation_t mem
             working[i]->processor_id == source_core) {
                 // Requisição completa
                 working[i]->updatePackageDRAMReady(0);
-                printf("Set to ready!\n");
                 return;
             }
     }
@@ -409,7 +406,11 @@ void memory_controller_t::clock(){
                 // -----------------------------------------------------------------------------------------
 
                 subrequests_on_track++; // Deixar aqui para evitar ficar negativo em stores que concluem imediatamente...
-                if(!send_request((working[i]->memory_operation == MEMORY_OPERATION_READ), working[i]->memory_address, working[i]->processor_id, this)) {
+                if(send_request((working[i]->memory_operation == MEMORY_OPERATION_READ), working[i]->memory_address, working[i]->processor_id, this)) {
+                  working[i]->ram_cycle = orcs_engine.get_global_cycle();
+                  working[i]->updatePackageDRAMFetch (0);
+                
+                } else {
                   subrequests_on_track--; // Se não conseguiu enviar, reduz o valor novamente
                 }
             }
@@ -434,6 +435,7 @@ void memory_controller_t::clock(){
             #if MEMORY_DEBUG
                 ORCS_PRINTF ("[MEMC] %lu %lu %s finishes at main memory! Took %lu cycles.\n", orcs_engine.get_global_cycle(), working[i]->memory_address, get_enum_memory_operation_char (working[i]->memory_operation), wait_time)
             #endif
+
 
             working[i]->updatePackageWait (1);
             this->total_operations[working[i]->memory_operation]++;

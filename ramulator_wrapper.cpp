@@ -34,7 +34,7 @@ bool send_request(bool is_read_request, int64_t memory_address, int context_id, 
     // 0 is Read and 1 is Write
     int req_type = is_read_request ? 0 : 1; 
 
-
+    
     // 2. Attempt to enqueue the request
     bool enqueue_success = ramulator2_frontend->receive_external_requests(
         req_type, 
@@ -79,6 +79,7 @@ bool send_request(bool is_read_request, int64_t memory_address, int context_id, 
         // If Ramulator is full, OrCS needs to know
         return false;
     }
+
 
     return true;
 }

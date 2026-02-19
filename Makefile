@@ -7,7 +7,7 @@ BIN_NAME = orcs
 RM = rm -f
 
 #FLAGS = -ggdb3 -g -std=c++17 -lefence -O1 -Wno-stringop-truncation -lefence 
-FLAGS =   -ggdb3 -g -Wall -Wextra -Werror -std=c++17 -lefence -O1 -pedantic -fsanitize=leak -Wno-stringop-truncation -lefence 
+FLAGS =   -ggdb3 -g -Wall -Wextra -Werror -std=c++17 -lefence -O1 -pedantic -fsanitize=leak -Wno-stringop-truncation -lefence
 LDFLAGS = -ggdb3
 ########################################################################
 ##FOLDERS
