@@ -33,6 +33,7 @@ memory_package_t::memory_package_t() {
     this->vima_write_vec = NULL;
 
     this->is_vectorial_part = -1;
+    this->is_prefetch = false;
 
     row_buffer = false;
     type = DATA;
@@ -209,6 +210,7 @@ void memory_package_t::package_clean() {
     this->vima_write_vec = NULL;
 
     this->is_vectorial_part = -1;
+    this->is_prefetch = false;
 
     row_buffer = false;
     type = DATA;

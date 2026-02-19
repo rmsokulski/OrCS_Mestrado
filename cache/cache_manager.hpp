@@ -49,8 +49,12 @@ class cache_manager_t {
         std::vector<memory_package_t*> requests;
 
 
+        // Prefetcher
+        bool prefetcher_ins_next_line_disabled;
+
         // Statistics
         uint64_t prefetch_requests_sent;
+        uint64_t instruction_prefetches_completed;
 
         cache_t **instantiate_cache(cacheId_t cache_type, libconfig::Setting &cfg_cache_defs);
         void get_cache_levels(cacheId_t cache_type, libconfig::Setting &cfg_cache_defs);
@@ -93,7 +97,8 @@ class cache_manager_t {
         void generateIndexArray(uint32_t processor_id, int32_t *cache_indexes);
         bool searchData(memory_package_t *mob_line);
         bool available(uint32_t processor_id, memory_operation_t op);
-        
+        void prefetchLine(uint64_t address, uint32_t processor_id);
+
         // Getters and setters
         INSTANTIATE_GET_SET_ADD(uint64_t, reads)
         INSTANTIATE_GET_SET_ADD(uint64_t, read_miss)
@@ -124,6 +129,7 @@ class cache_manager_t {
 
         INSTANTIATE_GET_SET_ADD(uint32_t, NUMBER_OF_PROCESSORS)
         INSTANTIATE_GET_SET_ADD(uint32_t, MAX_PARALLEL_REQUESTS_CORE)
+        INSTANTIATE_GET_SET_ADD(uint64_t, instruction_prefetches_completed)
 
 
         prefetcher_t *prefetcher;

@@ -1682,6 +1682,13 @@ void processor_t::decode()
 								  INSTRUCTION_OPERATION_MEM_LOAD,
 								  this->LATENCY_MEM_LOAD, this->WAIT_NEXT_MEM_LOAD, &(this->fu_mem_load),
 								  *this->fetchBuffer.front(), uops_created, is_masked);
+      #if DECODE_DEBUG  
+      printf("[DEBUG] Memory Operation - Opcode: %lu | Uop: %lu | Addr: %lu | Size: %u\n", 
+          instr->opcode_number,   // ID da instrução original
+          new_uop.uop_number,     // ID da micro-operação atual
+          instr->reads_addr[r], 
+          instr->reads_size[r]);
+      #endif
 			new_uop.add_memory_operation(instr->reads_addr[r], instr->reads_size[r]);
 			++uops_created;
 			// If op is not load, clear registers
@@ -1761,7 +1768,14 @@ void processor_t::decode()
 								  *this->fetchBuffer.front(), uops_created, is_masked);
 
 			for (uint32_t req = 0; req < MOB_READ; ++req) {
-        	     new_uop.add_memory_operation(instr->reads_addr[r + req], instr->reads_size[r + req]);
+        #if DECODE_DEBUG
+        printf("[DEBUG] Memory Operation - Opcode: %lu | Uop: %lu | Addr: %lu | Size: %u\n", 
+          instr->opcode_number,   // ID da instrução original
+          new_uop.uop_number,     // ID da micro-operação atual
+          instr->reads_addr[r + req], 
+          instr->reads_size[r + req]);
+        #endif
+          new_uop.add_memory_operation(instr->reads_addr[r + req], instr->reads_size[r + req]);
 			}
 
 			++uops_created;

@@ -38,6 +38,8 @@ class memory_package_t {
         uint64_t* op_count;
         uint32_t latency;
 
+        bool is_prefetch;
+
         // Request of data made when you have a cache miss for a write instruction
         // This info will be used to guide the type of request created in the DRAM.
         bool is_load_from_write; 

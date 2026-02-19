@@ -145,6 +145,25 @@ inline void cache_t::tagIdxSetCalculation(uint64_t address, uint64_t *idx, uint6
 // 	// tag >>= utils_t::get_power_of_two(this->n_sets);
 // }
 
+// Verifica se um endereço está na cache sem atualizar LRU ou estatísticas
+bool cache_t::peek(uint64_t address) {
+    uint64_t idx;
+    uint64_t tag;
+
+    // 1. Calcula o Índice (Set) e a Tag usando a mesma lógica de hardware da leitura
+    this->tagIdxSetCalculation(address, &idx, &tag);
+
+    // 2. Itera sobre todas as linhas (vias) do conjunto
+    for (size_t i = 0; i < this->sets[idx].n_lines; i++) {
+        // Verifica se a linha é válida E se a tag corresponde
+        if (this->sets[idx].lines[i].valid == 1 && this->sets[idx].lines[i].tag == tag) {
+            return true; // Está na cache (HIT)
+        }
+    }
+
+    return false; // Não está na cache (MISS)
+}
+
 // Reads a cache, updates cycles and return HIT or MISS status
 uint32_t cache_t::read(uint64_t address, uint32_t &ttc){
     uint64_t idx;

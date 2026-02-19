@@ -34,6 +34,8 @@ cache_manager_t::cache_manager_t() {
     this->NUMBER_OF_PROCESSORS = 0;
     this->MAX_PARALLEL_REQUESTS_CORE = 0;
 
+    this->instruction_prefetches_completed = 0;
+
     data_cache = NULL;
     instruction_cache = NULL;
     ICACHE_AMOUNT = NULL;
@@ -214,6 +216,23 @@ void cache_manager_t::allocate(uint32_t NUMBER_OF_PROCESSORS) {
 
     set_MAX_PARALLEL_REQUESTS_CORE(cfg_root["MEMORY_CONTROLLER"]["MAX_PARALLEL_REQUESTS_CORE"]);
 
+    // -----------------------------------------------------------------------------------------
+    // Verificação da flag prefetcher_ins_next_line_disabled
+    // -----------------------------------------------------------------------------------------
+    // Verificamos se a chave existe dentro de CACHE_MEMORY -> CONFIG
+    if (cfg_cache_defs["CONFIG"].exists("prefetcher_ins_next_line")) {
+        // Se existe, lê o valor do arquivo e inverte
+        this->prefetcher_ins_next_line_disabled = !cfg_cache_defs["CONFIG"]["prefetcher_ins_next_line"];
+    } else {
+        // Se não existe, define como TRUE (Desabilitado por padrão)
+        this->prefetcher_ins_next_line_disabled = true;
+    }
+// Linha de Debug
+#if CM_DEBUG == 1
+    ORCS_PRINTF("Prefetcher Next-Line L1-I: %s (Source: %s)\n", 
+        (this->prefetcher_ins_next_line_disabled ? "DISABLED" : "ENABLED"),
+        (cfg_cache_defs["CONFIG"].exists("prefetcher_ins_next_line") ? "File" : "Default"));
+#endif
     this->get_cache_levels(INSTRUCTION, cfg_cache_defs);
     this->get_cache_levels(DATA, cfg_cache_defs);
 
@@ -566,6 +585,11 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
             ongoing_requests.erase(std::remove (ongoing_requests.begin(), ongoing_requests.end(), request->subrequest_from[i]), ongoing_requests.end());
             ongoing_requests.shrink_to_fit();
 
+            if (request->subrequest_from[i]->is_prefetch) {
+              instruction_prefetches_completed++;
+            }
+
+            
             // Remove original request
             delete request->subrequest_from[i];
         }
@@ -641,7 +665,7 @@ bool cache_manager_t::searchData(memory_package_t *request) {
     else if (mem_t == MEMORY_OPERATION_WRITE) this->add_writes();
 
     #if MEMORY_REQUESTS_DEBUG
-    printf("cacheManager - searchData - Receiving request [Addr: %lu - Size: %u - Instruction: %lu]\n", request->memory_address, request->memory_size, request->uop_number);
+    printf("cacheManager - searchData - Receiving request (%s) [Addr: %lu - Size: %u - Instruction: %lu]\n", request->is_prefetch ? "P" : "R", request->memory_address, request->memory_size, request->uop_number);
     #endif
 
     /// %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -968,6 +992,16 @@ cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t
     #if MEMORY_DEBUG
         ORCS_PRINTF (" MISS!\n");
     #endif
+    // === NOVO: GATILHO DO NEXT-LINE PREFETCHER ===
+    // Verifica se:
+    // 1. É uma operação de instrução (MEMORY_OPERATION_INST)
+    // 2. Estamos no nível L1 (request->next_level == 0 antes do incremento, ou cache->level == 0)
+    // Nota: next_level indica para onde ele VAI. Se ele chegou aqui com next_level 0, ele está falhando na L1.
+    if (request->memory_operation == MEMORY_OPERATION_INST && request->next_level == 0) {
+        // Chama a função auxiliar que criamos no passo anterior
+        this->prefetchLine(request->memory_address, request->processor_id);
+    }
+    // =============================================
     request->updatePackageUntreated(ttc);
     request->next_level++;
 
@@ -980,6 +1014,97 @@ cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t
     }
     cache->cache_miss_per_type[request->memory_operation]++;
     return MISS;
+}
+
+void cache_manager_t::prefetchLine(uint64_t address, uint32_t processor_id) {
+    
+
+    if (this->prefetcher_ins_next_line_disabled) return;
+
+
+    // --------------------------------------------------------------------------------
+    // 1. VERIFICAÇÃO DE STALL (MSHR) - O CRUCIAL
+    // --------------------------------------------------------------------------------
+    // Se a cache de instruções não estiver disponível (MSHR cheio),
+    // nós ABORTAMOS o prefetch imediatamente. Não queremos travar o processador.
+    if (!this->available(processor_id, MEMORY_OPERATION_INST)) {
+        #if PROCESSOR_DEBUG
+            ORCS_PRINTF("Prefetch DROPPED due to MSHR Stall.\n");
+        #endif
+        return; 
+    }
+
+    // --------------------------------------------------------------------------------
+    // 2. Cálculo do Endereço (Next-Line)
+    // --------------------------------------------------------------------------------
+    // Assumindo 64 bytes (idealmente pegue de orcs_engine.configuration->blockSize)
+    uint64_t blockSize = 64; 
+    uint64_t nextAddress = (address & ~(blockSize - 1)) + blockSize;
+
+    // --------------------------------------------------------------------------------
+    // 3. Verificação se já existe (Opcional mas recomendado)
+    // --------------------------------------------------------------------------------
+    // Se já estiver na L1, não faz sentido buscar de novo
+    // (Ajuste o índice [0] se sua hierarquia for diferente)
+    // Nota: Como 'available' gera os indexes internamente, aqui assumimos acesso direto 
+    // ou usamos a mesma lógica se precisar dos índices corretos.
+    //
+    int32_t *cache_indexes = new int32_t[this->POINTER_LEVELS]();
+    this->generateIndexArray(processor_id, cache_indexes);
+
+    if (this->instruction_cache[0][cache_indexes[0]].peek(nextAddress)) {
+        delete[] cache_indexes;
+        return;
+    }
+
+    // --------------------------------------------------------------------------------
+    // 4. Criação e Envio do Pacote de Prefetch
+    // --------------------------------------------------------------------------------
+    memory_package_t* prefetch_pkg = new memory_package_t;
+    
+    // --- IDENTIFICAÇÃO ---
+    prefetch_pkg->processor_id = processor_id;
+    
+    // IMPORTANTE: Prefetch não é uma instrução real do pipeline.
+    // Usamos 0 para indicar que é uma operação especulativa do sistema de memória.
+    prefetch_pkg->uop_number = 0;     
+    prefetch_pkg->opcode_number = 0;  
+
+    // --- ENDEREÇAMENTO ---
+    prefetch_pkg->opcode_address = nextAddress;   // O endereço da "instrução" é o endereço alvo
+    prefetch_pkg->memory_address = nextAddress;   // O dado que queremos buscar
+    prefetch_pkg->memory_size = blockSize;     // Trazemos a linha inteira (geralmente 64 bytes)
+
+    // --- TIPO DE OPERAÇÃO ---
+    prefetch_pkg->memory_operation = MEMORY_OPERATION_INST;
+    prefetch_pkg->type = INSTRUCTION;          // Tipo geral
+
+    // --- FLAGS ESPECÍFICAS DO ORCS ---
+    prefetch_pkg->is_hive = false;             // Não é instrução vetorial HIVE
+    prefetch_pkg->is_vima = false;             // Não é instrução de memória inteligente VIMA
+    
+    // --- ESTADO E TEMPO ---
+    prefetch_pkg->status = PACKAGE_STATE_UNTREATED;
+    prefetch_pkg->readyAt = orcs_engine.get_global_cycle();  // Pronto agora
+    prefetch_pkg->born_cycle = orcs_engine.get_global_cycle(); // Nasceu agora
+    prefetch_pkg->sent_to_ram = false;         // Ainda não foi para a RAM
+
+    // --- CONTROLE DE CACHE ---
+    // Nível 1 significa que tentaremos inserir na L2, passando pelo controle de MSHR
+    prefetch_pkg->next_level = 1;
+    
+    // Se sua struct tiver um campo para identificar prefetch explicitamente:
+    prefetch_pkg->is_prefetch = true;
+    
+    // Flag para indicar que é prefetch (se sua struct memory_package_t tiver esse campo)
+    // prefetch_pkg->is_prefetch = true; 
+
+    // Envia para a busca. 
+    // ATENÇÃO: Ao chamar searchInstruction novamente, ele vai passar pelo 'available'
+    // dentro do fluxo normal ou cair no miss.
+    this->searchData(prefetch_pkg); 
+
+    this->prefetch_requests_sent++;
 }
 
 bool cache_manager_t::available (uint32_t processor_id, memory_operation_t op){
@@ -1043,6 +1168,8 @@ void cache_manager_t::statistics(FILE *output, uint32_t core_id) {
         fprintf(output, "Already there (WRITE): %lu\n", already_searching_write);
 
         fprintf(output, "Prefetches request sent: %lu\n", this->prefetch_requests_sent);
+        fprintf(output, "Instruction prefetch requests completed: %lu\n", this->instruction_prefetches_completed);
+        
 
     }
 

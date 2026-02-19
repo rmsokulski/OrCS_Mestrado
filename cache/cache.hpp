@@ -84,6 +84,7 @@ class cache_t {
         void returnLine(memory_package_t* request, cache_t *cache);//return line from lower cache level
         void tagIdxSetCalculation(uint64_t address, uint64_t *idx, uint64_t *tag); //calculate index of data, makes tag from address
         uint32_t searchLru(cacheSet_t *set);//searh LRU to substitue
+        bool peek(uint64_t address);
         uint32_t read(uint64_t address, uint32_t &ttc);
         uint32_t write(memory_package_t* request);
         void printTagIdx(uint64_t address);
