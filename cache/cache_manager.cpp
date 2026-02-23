@@ -764,7 +764,7 @@ void cache_manager_t::process (memory_package_t* request, int32_t* cache_indexes
                     // -----------------------------------------------------------------------------------------
                     if (!cache->get_mshr_stall()) {
                         #if MEMORY_DEBUG
-                            ORCS_PRINTF (" sent to %s |", get_enum_cache_level_char ((cacheLevel_t) request->next_level))
+                            ORCS_PRINTF (" sent to L%d |", (request->next_level))
                         #endif
 
                         // -----------------------------------------------------------------------------------------
@@ -1212,4 +1212,60 @@ void cache_manager_t::reset_statistics (uint32_t core_id) {
     if (PREFETCHER_ACTIVE) this->prefetcher->reset_statistics();
 
     delete[] cache_indexes;
+}
+
+void cache_manager_t::dump_state(FILE *output) {
+    if (output == NULL) return;
+
+    fprintf(output, "\n========================================================\n");
+    fprintf(output, "         CACHE MANAGER STATE DUMP (MSHR Focus)         \n");
+    fprintf(output, "========================================================\n");
+
+    // --- Data Caches ---
+    fprintf(output, "DATA CACHE HIERARCHY (%u Levels):\n", this->DATA_LEVELS);
+    for (uint32_t level = 0; level < this->DATA_LEVELS; ++level) {
+        fprintf(output, "  L%d Data:\n", level + 1);
+        for (uint32_t i = 0; i < this->DCACHE_AMOUNT[level]; ++i) {
+            cache_t* c = &this->data_cache[level][i];
+            
+            float utilization = (c->mshr_size > 0) ? 
+                ((float)c->mshr_occupied_entries / c->mshr_size) * 100.0 : 0.0;
+
+            fprintf(output, "    [Cache %2d] MSHR: %d/%d entries used (%5.2f%%) %s\n", 
+                    c->id, 
+                    c->mshr_occupied_entries, 
+                    c->mshr_size, 
+                    utilization,
+                    c->mshr_stall ? "[STALLED]" : "");
+        }
+    }
+
+    fprintf(output, "--------------------------------------------------------\n");
+
+    // --- Instruction Caches ---
+    fprintf(output, "INSTRUCTION CACHE HIERARCHY (%u Levels):\n", this->INSTRUCTION_LEVELS);
+    for (uint32_t level = 0; level < this->INSTRUCTION_LEVELS; ++level) {
+        fprintf(output, "  L%d Inst:\n", level + 1);
+        for (uint32_t i = 0; i < this->ICACHE_AMOUNT[level]; ++i) {
+            cache_t* c = &this->instruction_cache[level][i];
+            
+            float utilization = (c->mshr_size > 0) ? 
+                ((float)c->mshr_occupied_entries / c->mshr_size) * 100.0 : 0.0;
+
+            fprintf(output, "    [Cache %2d] MSHR: %d/%d entries used (%5.2f%%) %s\n", 
+                    c->id, 
+                    c->mshr_occupied_entries, 
+                    c->mshr_size, 
+                    utilization,
+                    c->mshr_stall ? "[STALLED]" : "");
+        }
+    }
+
+    // --- Ongoing Requests ---
+    fprintf(output, "--------------------------------------------------------\n");
+    fprintf(output, "GLOBAL PENDING REQUESTS: %zu\n", ongoing_requests.size());
+    fprintf(output, "========================================================\n\n");
+    
+    // Critical: Flush the file so the data is written even if the program crashes immediately after
+    fflush(output);
 }

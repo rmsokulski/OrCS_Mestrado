@@ -65,7 +65,7 @@ bool send_request(bool is_read_request, int64_t memory_address, int context_id, 
     if (is_read_request == false && enqueue_success) {
       
       #if MEMORY_DEBUG
-      printf("[RAMULATOR2] Callback for Addr: %lu\n", addr);
+      printf("[RAMULATOR2] Callback for Addr: %lu\n", memory_address);
       printf("Ramulator request finished!\n");
       #endif
 

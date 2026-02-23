@@ -259,6 +259,7 @@ class processor_t {
 		// ====================================================================
 		processor_t();
 		~processor_t();
+    void dump_state(FILE *out);
 	    void allocate();
         void clock();
 		void statistics(FILE *output);

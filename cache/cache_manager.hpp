@@ -86,6 +86,7 @@ class cache_manager_t {
         uint64_t* op_max;
 
         bool print_rob;
+        void dump_state(FILE *);  
 
         cache_manager_t();
         ~cache_manager_t();

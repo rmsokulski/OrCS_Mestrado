@@ -309,6 +309,9 @@ inline void cache_t::writeBack(line_t *line, uint32_t processor_id, uint64_t mem
       	request->sent_to_ram = false;
       	request->type = DATA;
       	request->op_count[request->memory_operation]++;
+        // Assinatura para os write backs
+        request->opcode_number = 42;
+        request->uop_number = 42;
     	orcs_engine.memory_controller->requestDRAM(request);
 	// Intermediate cache levels issues
 	} else {

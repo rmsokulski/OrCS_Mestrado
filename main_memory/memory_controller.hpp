@@ -116,6 +116,7 @@ class memory_controller_t{
         // ==========================================================================
         memory_controller_t();
         ~memory_controller_t();
+        void dump_state(FILE *out);
         void clock();
         void statistics(FILE *output);
         void reset_statistics();

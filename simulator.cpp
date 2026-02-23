@@ -266,14 +266,56 @@ int main(int argc, char **argv) {
     orcs_engine.simulator_alive = true;
 
     /// Start CLOCK for all the components
+    uint64_t last_instruction_count = 0;
+    uint64_t last_memory_count = 0; // Track total memory progress
+    uint64_t last_progress_cycle = 0;
+    const uint64_t STALL_THRESHOLD = 10000;
+
     while (orcs_engine.get_simulation_alive(NUMBER_OF_PROCESSORS)) {
         #if HEARTBEAT
-            if(orcs_engine.get_global_cycle()%HEARTBEAT_CLOCKS==0){
+            if(orcs_engine.get_global_cycle() % HEARTBEAT_CLOCKS == 0){
                 gettimeofday(&orcs_engine.stat_timer_end, NULL);
-                ORCS_PRINTF("%s\n",get_status_execution(NUMBER_OF_PROCESSORS).c_str());
+                ORCS_PRINTF("%s\n", get_status_execution(NUMBER_OF_PROCESSORS).c_str());
                 fflush(stdout);
             }
         #endif
+
+        // --- IMPROVED STALL DETECTION LOGIC START ---
+        uint64_t current_instruction_count = 0;
+        for (uint32_t i = 0; i < NUMBER_OF_PROCESSORS; i++) {
+            current_instruction_count += orcs_engine.trace_reader[i].get_fetch_instructions();
+        }
+
+        // Progress in memory can be measured by requests completed or operations executed
+        uint64_t current_memory_count = orcs_engine.memory_controller->get_operations_executed();
+        
+        // Also consider progress if the queue size changed (something was dispatched or added)
+        // For a more robust check, we use the sum of executed operations.
+        if (current_instruction_count > last_instruction_count || current_memory_count > last_memory_count) {
+            // Real progress made in either CPU or Memory
+            last_instruction_count = current_instruction_count;
+            last_memory_count = current_memory_count;
+            last_progress_cycle = orcs_engine.get_global_cycle();
+        } else {
+            // No instructions fetched AND no DRAM operations completed
+            if ((orcs_engine.get_global_cycle() - last_progress_cycle) >= STALL_THRESHOLD) {
+                fprintf(stderr, "\n!!! DEADLOCK DETECTED AT CYCLE %lu !!!\n", orcs_engine.get_global_cycle());
+                fprintf(stdout, "\n!!! DEADLOCK DETECTED AT CYCLE %lu !!!\n", orcs_engine.get_global_cycle());
+                fprintf(stderr, "Reason: No CPU or DRAM progress for %lu cycles.\n", STALL_THRESHOLD);
+                
+                for (uint32_t i = 0; i < NUMBER_OF_PROCESSORS; i++) {
+                    fprintf(stderr, ">>> [DUMP CORE %d] <<<\n", i);
+                    orcs_engine.processor[i].dump_state(stderr);
+                }
+                orcs_engine.cacheManager->dump_state(stderr);
+                orcs_engine.memory_controller->dump_state(stderr);
+                
+                orcs_engine.simulator_alive = false; 
+                break; 
+            }
+        }
+        // --- STALL DETECTION LOGIC END ---
+
         orcs_engine.memory_controller->clock();
         for (uint32_t i = 0; i < NUMBER_OF_PROCESSORS; i++)
         {

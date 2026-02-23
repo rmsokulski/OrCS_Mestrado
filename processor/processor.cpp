@@ -721,7 +721,73 @@ bool processor_t::isBusy()
 			!this->decodeBuffer.is_empty() ||
 			reorderBuffer.robUsed != 0);
 }
+void processor_t::dump_state(FILE *out) {
+    const char* sep = "================================================================================";
+    
+    fprintf(out, "\n%s\n", sep);
+    fprintf(out, "PROCESSOR DEADLOCK DUMP - Core %lu - Cycle %lu\n", 
+            this->processor_id, orcs_engine.get_global_cycle());
+    fprintf(out, "%s\n", sep);
 
+    // 1. Pipeline Counters
+    fprintf(out, ">>> PIPELINE PROGRESS <<<\n");
+    fprintf(out, "  Fetch: %lu | Decode: %lu | Rename: %lu | Commit: %lu\n", 
+            this->fetchCounter, this->decodeCounter, this->renameCounter, this->commit_uop_counter);
+   
+    fprintf(out, "  FetchBuffer:  %u/%u\n", this->fetchBuffer.get_size(), this->FETCH_BUFFER);
+    fprintf(out, "  DecodeBuffer: %u/%u\n", this->decodeBuffer.get_size(), this->DECODE_BUFFER);
+    fprintf(out, "  ROB Usage:    %u/%u\n", this->reorderBuffer.robUsed, this->reorderBuffer.SIZE);
+    fprintf(out, "  RS Usage:     %u/%u\n", (uint32_t)this->unified_reservation_station.size(), this->UNIFIED_RS);
+
+    // 2. ROB Head (The Commit Blocker)
+    fprintf(out, "\n>>> ROB HEAD (Oldest Instruction) <<<\n");
+    if (this->reorderBuffer.robUsed > 0) {
+        reorder_buffer_line_t* head = &this->reorderBuffer.reorderBuffer[this->reorderBuffer.robStart];
+        
+        fprintf(out, "  [ROB Index %u] PC: 0x%lx | UOP#: %lu | Opcode#: %lu\n", 
+                this->reorderBuffer.robStart, head->uop.opcode_address, head->uop.uop_number, head->uop.opcode_number);
+        fprintf(out, "  Stage: %d | Committed: %s | Sent to Commit: %s\n", 
+                (int)head->stage, 
+                head->committed ? "YES" : "NO", 
+                head->sent ? "YES" : "NO");
+        fprintf(out, "  Blocking Reasons: WaitRegDeps: %u | WaitMemReq: %u\n", 
+                head->wait_reg_deps_number, head->waiting_mem_request);
+        
+        if (head->pos_mob != -1) {
+            fprintf(out, "  Linked MOB Position: %d\n", head->pos_mob);
+        }
+    } else {
+        fprintf(out, "  ROB is empty.\n");
+    }
+
+    // 3. Memory Order Buffer (MOB) Status
+    fprintf(out, "\n>>> MOB READ QUEUE STATUS <<<\n");
+    fprintf(out, "  Used: %u/%u | Start: %u | End: %u\n", 
+            this->memory_order_buffer_read_used, this->MOB_READ, 
+            this->memory_order_buffer_read_start, this->memory_order_buffer_read_end);
+    
+    if (this->memory_order_buffer_read_used > 0) {
+        uint32_t midx = this->memory_order_buffer_read_start;
+        memory_order_buffer_line_t* mline = &this->memory_order_buffer_read[midx];
+        fprintf(out, "  Oldest MOB Read: UOP#: %lu | Addr: 0x%lx\n", 
+                mline->uop_number, mline->memory_address);
+        fprintf(out, "  Status: Executed: %s | Sent: %s | WaitDRAM: %s | ReadyToGo: %lu\n",
+                mline->uop_executed ? "YES" : "NO", 
+                mline->sent ? "YES" : "NO", 
+                mline->waiting_DRAM ? "YES" : "NO", 
+                mline->readyToGo);
+    }
+
+    // 4. Stall Statistics counters
+    fprintf(out, "\n>>> STALL STATS <<<\n");
+    fprintf(out, "  Full ROB: %lu | Full MOB Read: %lu | Full MOB Write: %lu\n", 
+            this->stall_full_ROB, this->stall_full_MOB_Read, this->stall_full_MOB_Write);
+    fprintf(out, "  Full FetchBuffer: %lu | Full DecodeBuffer: %lu\n", 
+            this->stall_full_FetchBuffer, this->stall_full_DecodeBuffer);
+
+    fprintf(out, "%s\n", sep);
+    fflush(out);
+}
 // ======================================
 // Require a position to insert on ROB
 // The Reorder Buffer behavior is a Circular FIFO
@@ -1231,8 +1297,13 @@ void processor_t::fetch()
 				ORCS_PRINTF("[PROC] %lu {%lu} %lu %s sent to memory.I\n", orcs_engine.get_global_cycle(), request->opcode_number, request->memory_address, get_enum_memory_operation_char(request->memory_operation))
 #endif
 				fetch_CacheManager_Inst_requests++;
-				if (!orcs_engine.cacheManager->searchData(request))
+				if (!orcs_engine.cacheManager->searchData(request)) {
+
 					delete request;
+          ORCS_PRINTF("PROCESSOR::FETCH::ERROR: searchData retrieved false to the instruction request!\n");
+          exit(1);
+
+        }
 
 		}
 	}

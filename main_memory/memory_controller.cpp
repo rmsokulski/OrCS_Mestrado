@@ -1,5 +1,7 @@
 #include "./../simulator.hpp"
 #include <string>
+
+uint32_t subrequests_on_track = 0;
 // ============================================================================
 memory_controller_t::memory_controller_t(){
     this->use_orcs = true;
@@ -70,7 +72,65 @@ memory_controller_t::~memory_controller_t(){
     delete[] this->channels;
 }
 // ============================================================================
+void memory_controller_t::dump_state(FILE *out) {
+    // Create the separator string once
+    const char* sep = "################################################################################";
+    
+    fprintf(out, "\n%s\n", sep);
+    fprintf(out, "MEMORY CONTROLLER DEADLOCK DUMP - Cycle %lu\n", orcs_engine.get_global_cycle());
+    fprintf(out, "%s\n", sep);
 
+// 1. General Stats
+    fprintf(out, ">>> MEMORY SYSTEM STATUS <<<\n");
+    fprintf(out, "  Requests Made: %lu | LLC Requests: %lu\n", this->requests_made, this->requests_llc);
+    fprintf(out, "  HIVE: %lu | VIMA: %lu | Prefetcher: %lu\n", 
+            this->requests_hive, this->requests_vima, this->requests_prefetcher);
+    
+    // Filas e Rastreamento de Sub-requisições
+    fprintf(out, "  Ongoing Requests Size: %lu\n", (unsigned long)this->ongoing_requests.size());
+    fprintf(out, "  Working Requests Size: %lu\n", (unsigned long)this->working.size());
+    fprintf(out, "  Sub-requests Tracked:  %lu\n", (unsigned long)subrequests_on_track);
+
+    // 2. Ongoing Requests
+    fprintf(out, "\n>>> ONGOING REQUESTS (Waiting for DRAM Dispatch) <<<\n");
+    if (this->ongoing_requests.empty()) {
+        fprintf(out, "  No requests in ongoing_requests queue.\n");
+    } else {
+        for (size_t i = 0; i < ongoing_requests.size() && i < 10; i++) {
+            memory_package_t* pkg = ongoing_requests[i];
+            fprintf(out, "  [%lu] Core: %u | Opcode#: %lu | UOP#: %lu | Addr: 0x%lx\n",
+                    (unsigned long)i, pkg->processor_id, pkg->opcode_number, pkg->uop_number, pkg->memory_address);
+            fprintf(out, "       OpType: %d | Born: %lu | Status: %s\n",
+                    (int)pkg->memory_operation, 
+                    pkg->born_cycle, 
+                    get_enum_package_state_char(pkg->status));
+        }
+    }
+
+    // 3. Working Requests
+    fprintf(out, "\n>>> WORKING REQUESTS (In-flight DRAM/Accelerator) <<<\n");
+    if (this->working.empty()) {
+        fprintf(out, "  No requests currently being processed in DRAM.\n");
+    } else {
+        for (size_t i = 0; i < working.size(); i++) {
+            memory_package_t* pkg = working[i];
+            fprintf(out, "  [%lu] Core: %u | Opcode#: %lu | UOP#: %lu\n",
+                    (unsigned long)i, pkg->processor_id, pkg->opcode_number, pkg->uop_number);
+            fprintf(out, "       Addr: 0x%lx | Status: %s | ReadyAt: %lu\n",
+                    pkg->memory_address, 
+                    get_enum_package_state_char(pkg->status), 
+                    pkg->readyAt);
+            
+            if (pkg->readyAt <= orcs_engine.get_global_cycle()) {
+                fprintf(out, "    !! STALL ALERT: UOP# %lu should have finished at cycle %lu !!\n", 
+                        pkg->uop_number, pkg->readyAt);
+            }
+        }
+    }
+
+    fprintf(out, "%s\n", sep);
+    fflush(out);
+}
 // ============================================================================
 // @allocate objects to#if MEMORY_REQUESTS_DEBUG EMC
 void memory_controller_t::allocate() {
@@ -308,7 +368,6 @@ bool memory_controller_t::isBusy(){
     }
     return false;
 }
-uint32_t subrequests_on_track = 0;
 void memory_controller_t::request_finished(uint64_t addr, memory_operation_t mem_op, uint32_t source_core) {
     // uint64_t addr = (uint64_t)req.addr;
     // memory_operation_t mem_op = (req.type_id == 0) ? MEMORY_OPERATION_READ : MEMORY_OPERATION_WRITE;
@@ -320,7 +379,6 @@ void memory_controller_t::request_finished(uint64_t addr, memory_operation_t mem
     ERROR_ASSERT_PRINTF(subrequests_on_track > 0, "Subrequests on track below zero!!\n");
 
     subrequests_on_track--;
-    
 
     for (i = 0; i < working.size(); i++) {
         if (working[i]->memory_operation == mem_op &&
@@ -408,8 +466,15 @@ void memory_controller_t::clock(){
                 subrequests_on_track++; // Deixar aqui para evitar ficar negativo em stores que concluem imediatamente...
                 if(send_request((working[i]->memory_operation == MEMORY_OPERATION_READ), working[i]->memory_address, working[i]->processor_id, this)) {
                   working[i]->ram_cycle = orcs_engine.get_global_cycle();
-                  working[i]->updatePackageDRAMFetch (0);
                 
+
+                // -----------------------------------------------------------------------------------------
+                // Se for uma escrita, já estará como ready, já que o callback do ramulator nunca é chamado
+                // Se for uma leitura, vai que o ramulator respondeu instantâneamente :p
+                // -----------------------------------------------------------------------------------------
+                  if (working[i]->status != PACKAGE_STATE_DRAM_READY) {
+                    working[i]->updatePackageDRAMFetch (0);
+                  }
                 } else {
                   subrequests_on_track--; // Se não conseguiu enviar, reduz o valor novamente
                 }
@@ -472,6 +537,7 @@ void memory_controller_t::clock(){
             delete working[i];
             working.erase(std::remove(working.begin(), working.end(), working[i]), working.end());
             working.shrink_to_fit();
+            this->operations_executed++;
 
         }
     }
@@ -568,8 +634,6 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
 
             ERROR_ASSERT_PRINTF (subrequest->memory_operation == MEMORY_OPERATION_READ || subrequest->memory_operation == MEMORY_OPERATION_WRITE, "Memory operation type in memory different from READ/WRITE: %d\n", subrequest->memory_operation);
 
-
-
             subrequest->memory_address = request->memory_address;
             subrequest->memory_size = request->memory_size;
 
@@ -580,7 +644,6 @@ uint64_t memory_controller_t::requestDRAM (memory_package_t* request){
             this->add_sub_requests_made();
             this->working.push_back (subrequest);
             this->working.shrink_to_fit();
-            //printf("Adding subrequests, now with %ld ongoing requests and %ld subrequests\n", ongoing_requests.size(), working.size());
         }
 
         if (use_orcs) {
