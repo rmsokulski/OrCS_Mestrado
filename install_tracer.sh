@@ -3,16 +3,18 @@
 # Change this when become necessary
 PINPLAY_IDENTIFIER="pinplay-"
 
-# Navigate to the tracer directory
-cd trace_generator
+set -e
+
+# Navigate to the tracer directory (works from any cwd)
+cd "$(dirname "$0")/trace_generator"
 
 # Download pin/pinpoints 3.11
 # wget https://software.intel.com/system/files/pinplay-dcfg-3.11-pin-3.11-97998-g7ecce2dac-gcc-linux.tar.bz2
 
 # Extract the files
 #https://www.marksanborn.net/linux/extract-without-first-directory/
-tar -xvjf $PINPLAY_IDENTIFIER*.tar.bz2 --strip 1
-rm $PINPLAY_IDENTIFIER*.tar.bz2 -f
+# The tarball is kept (gitignored) so the kit can be reinstalled
+tar -xjf $PINPLAY_IDENTIFIER*.tar.bz2 --strip 1
 
 # Copy required files
 srcCPP="extras/pinplay/examples/pinplay-debugger-shell.cpp"

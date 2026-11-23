@@ -1,0 +1,26 @@
+# ---------------------------------------------------------------------------
+# Pin/PinPlay 3.11 kit, extracted here by ../install_tracer.sh.
+# Only the OrCS tracer sources and our PinPoints scripts are versioned.
+# ---------------------------------------------------------------------------
+/pinplay-*.tar.bz2
+/README
+/pin
+/pin.sig
+/doc/
+/ia32/
+/intel64/
+/licensing/
+/source/
+/make.temp
+
+/extras/*
+!/extras/pinplay/
+/extras/pinplay/*
+!/extras/pinplay/sinuca_tracer/
+!/extras/pinplay/PinPoints/
+/extras/pinplay/PinPoints/README.PinPoints
+/extras/pinplay/PinPoints/bin/
+
+# Tracer build output
+/extras/pinplay/sinuca_tracer/obj-intel64/
+/extras/pinplay/sinuca_tracer/obj-ia32/
