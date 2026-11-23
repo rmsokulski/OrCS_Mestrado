@@ -1,6 +1,8 @@
 styleguide/
 trace_generator/extras/pinplay/PinPoints/
 graphify-out/
+trace_generator/kernels/*/*.x86
+trace_generator/kernels/*/*.vima
 trace_generator/pinplay-*.tar.bz2
 trace_generator/README
 trace_generator/doc/

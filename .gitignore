@@ -39,3 +39,8 @@ Thumbs.db
 *.ipch
 results_memory_home_txt
 orcs
+
+# Trace kernel binaries #
+#########################
+trace_generator/kernels/*/*.x86
+trace_generator/kernels/*/*.vima
