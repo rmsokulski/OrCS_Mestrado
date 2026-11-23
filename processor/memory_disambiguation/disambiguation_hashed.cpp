@@ -38,7 +38,7 @@ void disambiguation_hashed_t::allocate() {
     set_WAIT_CYCLE (cfg_processor["WAIT_CYCLE"]);
 
 	// DISAMBIGUATION 
-	ERROR_ASSERT_PRINTF(utils_t::check_if_power_of_two(LOAD_HASH_SIZE), "Wrong disambiguation_load_hash_size.\n")
+	ERROR_ASSERT_PRINTF(utils_t::check_if_power_of_two(LOAD_HASH_SIZE), "Wrong disambiguation_load_hash_size.\n");
 	for (uint32_t i = 0; i < utils_t::get_power_of_two(LOAD_HASH_SIZE); i++) {
 		this->disambiguation_load_hash_bits_mask |= 1 << i;
 	}
@@ -47,11 +47,11 @@ void disambiguation_hashed_t::allocate() {
 	this->disambiguation_load_hash = utils_t::template_allocate_initialize_array<memory_order_buffer_line_t *>(LOAD_HASH_SIZE, NULL);
 
 	/// DISAMBIGUATION OFFSET MASK
-	ERROR_ASSERT_PRINTF(utils_t::check_if_power_of_two(STORE_HASH_SIZE), "Wrong disambiguation_store_hash_size.\n")
+	ERROR_ASSERT_PRINTF(utils_t::check_if_power_of_two(STORE_HASH_SIZE), "Wrong disambiguation_store_hash_size.\n");
 	for (uint32_t i = 0; i < utils_t::get_power_of_two(STORE_HASH_SIZE); i++) {
 		this->disambiguation_store_hash_bits_mask |= 1 << i;
 	}
-	this->disambiguation_store_hash_bits_shift <<= utils_t::get_power_of_two(DESAMBIGUATION_BLOCK_SIZE);
+	this->disambiguation_store_hash_bits_shift = utils_t::get_power_of_two(DESAMBIGUATION_BLOCK_SIZE);
 	this->disambiguation_store_hash_bits_mask <<= this->disambiguation_store_hash_bits_shift;
 	this->disambiguation_store_hash = utils_t::template_allocate_initialize_array<memory_order_buffer_line_t *>(STORE_HASH_SIZE, NULL);
 	// Setting values of statistics at Zero
@@ -81,7 +81,7 @@ void disambiguation_hashed_t::make_memory_dependences(memory_order_buffer_line_t
 			if (old_mob_line->mem_deps_ptr_array[k] == NULL) {
 				old_mob_line->mem_deps_ptr_array[k] = new_mob_line;
 				new_mob_line->wait_mem_deps_number++;
-				if (DEBUG) ORCS_PRINTF ("Disamb make_memory_dependencies(): load %lu -> %lu.\n", old_mob_line->memory_address, new_mob_line->memory_address)
+				if (DEBUG) ORCS_PRINTF ("Disamb make_memory_dependencies(): load %lu -> %lu.\n", old_mob_line->memory_address, new_mob_line->memory_address);
 				break;
 			}
 		}
@@ -94,7 +94,7 @@ void disambiguation_hashed_t::make_memory_dependences(memory_order_buffer_line_t
 			if (old_mob_line->mem_deps_ptr_array[k] == NULL) {
 				old_mob_line->mem_deps_ptr_array[k] = new_mob_line;
 				new_mob_line->wait_mem_deps_number++;
-				if (DEBUG) ORCS_PRINTF ("Disamb make_memory_dependencies(): store %lu -> %lu.\n", old_mob_line->memory_address, new_mob_line->memory_address)
+				if (DEBUG) ORCS_PRINTF ("Disamb make_memory_dependencies(): store %lu -> %lu.\n", old_mob_line->memory_address, new_mob_line->memory_address);
 				break;
 			}
 		}
@@ -117,7 +117,7 @@ void disambiguation_hashed_t::solve_memory_dependences(memory_order_buffer_line_
 		uint64_t load_hash = mob_line->memory_address & this->disambiguation_load_hash_bits_mask;
 		load_hash >>= this->disambiguation_load_hash_bits_shift;
 
-		ERROR_ASSERT_PRINTF(load_hash < LOAD_HASH_SIZE, "load_hash (%" PRIu64 ") > disambiguation_load_hash_size (%d)\n",
+		ERROR_ASSERT_PRINTF(load_hash < LOAD_HASH_SIZE, "load_hash (%lu) > disambiguation_load_hash_size (%d)\n",
 							load_hash, LOAD_HASH_SIZE);
 		if (this->disambiguation_load_hash[load_hash] == mob_line) {
 			this->disambiguation_load_hash[load_hash] = NULL;
@@ -126,7 +126,7 @@ void disambiguation_hashed_t::solve_memory_dependences(memory_order_buffer_line_
 		uint64_t store_hash = mob_line->memory_address & this->disambiguation_store_hash_bits_mask;
 		store_hash >>= this->disambiguation_store_hash_bits_shift;
 
-		ERROR_ASSERT_PRINTF(store_hash < STORE_HASH_SIZE, "store_hash (%" PRIu64 ") > disambiguation_store_hash_size (%d)\n",
+		ERROR_ASSERT_PRINTF(store_hash < STORE_HASH_SIZE, "store_hash (%lu) > disambiguation_store_hash_size (%d)\n",
 							store_hash, STORE_HASH_SIZE);
 
 		if (this->disambiguation_store_hash[store_hash] == mob_line) {
