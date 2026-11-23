@@ -7,7 +7,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 PIN=${PIN_ROOT:?set PIN_ROOT}/pin
-TOOL=${TOOL:-$REPO/trace_generator/extras/pinplay/sinuca_tracer/obj-intel64/sinuca_tracer.so}
+TOOL=${TOOL:-$REPO/trace_generator/extras/pinplay/bin/intel64/sinuca_tracer.so}
 OUT=${TRACE_DIR:-$(dirname "$REPO")/traces}
 
 if [ $# -gt 0 ]; then KERNELS=("$@"); else
