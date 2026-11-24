@@ -1225,3 +1225,46 @@ void cache_manager_t::reset_statistics (uint32_t core_id) {
 
     delete[] cache_indexes;
 }
+
+// =====================================================================
+/// Scan every cache: each valid line's pointers must lead to a valid line
+/// with the same tag, and with an inclusive LLC every valid upper-level
+/// line must also be in the LLC. Prints the counts (CACHE_CHECK).
+void cache_manager_t::check_consistency() {
+    uint64_t lines = 0, bad_pointers = 0, not_in_llc = 0;
+    cache_t *llc = this->data_cache[DATA_LEVELS - 1];
+    uint32_t llc_amount = DCACHE_AMOUNT[DATA_LEVELS - 1];
+    bool inclusive = llc[0].inclusive;
+
+    for (uint32_t t = 0; t < 2; t++) {
+        uint32_t levels = (t == 0) ? INSTRUCTION_LEVELS : DATA_LEVELS;
+        for (uint32_t lv = 0; lv < levels; lv++) {
+            uint32_t amount = (t == 0) ? ICACHE_AMOUNT[lv] : DCACHE_AMOUNT[lv];
+            for (uint32_t j = 0; j < amount; j++) {
+                cache_t *c = (t == 0) ? &this->instruction_cache[lv][j] : &this->data_cache[lv][j];
+                for (uint32_t s = 0; s < c->n_sets; s++) {
+                    for (uint32_t w = 0; w < c->sets[s].n_lines; w++) {
+                        line_t *l = &c->sets[s].lines[w];
+                        if (!l->valid) continue;
+                        lines++;
+                        for (uint32_t p = 0; p < NUMBER_OF_PROCESSORS; p++) {
+                            for (uint32_t k = 0; k < POINTER_LEVELS; k++) {
+                                line_t *q = l->line_ptr_caches[p][k];
+                                if (q != NULL && (!q->valid || q->tag != l->tag)) bad_pointers++;
+                            }
+                        }
+                        if (inclusive && !(t == 1 && lv == DATA_LEVELS - 1)) {
+                            bool found = false;
+                            for (uint32_t m = 0; m < llc_amount && !found; m++) {
+                                found = llc[m].peek(l->tag << c->offset);
+                            }
+                            if (!found) not_in_llc++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ORCS_PRINTF("CACHE_CHECK: %lu valid lines, %lu bad pointers, %lu upper-level lines not in the LLC (%s LLC)\n",
+                lines, bad_pointers, not_in_llc, inclusive ? "inclusive" : "non-inclusive, not checked")
+}

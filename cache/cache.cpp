@@ -18,6 +18,8 @@ cache_t::cache_t() {
     this->cache_write = 0;
     this->cache_writeback = 0;
     this->cache_install = 0;
+    this->cache_back_invalidation = 0;
+    this->inclusive = true;
 	this->is_inst_cache = false;
 
 	this->mshr_occupied_entries = 0;
@@ -57,6 +59,12 @@ void cache_t::allocate(uint32_t NUMBER_OF_PROCESSORS, uint32_t INSTRUCTION_LEVEL
 	// Get general cache info
 	libconfig::Setting &cfg_cache_defs = cfg_root["CACHE_MEMORY"]["CONFIG"];
 	set_WAIT_CYCLE(cfg_cache_defs["WAIT_CYCLE"]);
+
+	/// LLC inclusion policy (optional): "INCLUSIVE" (default) or "NON_INCLUSIVE"
+	std::string inclusion = "INCLUSIVE";
+	cfg_cache_defs.lookupValue("INCLUSION", inclusion);
+	ERROR_ASSERT_PRINTF(inclusion == "INCLUSIVE" || inclusion == "NON_INCLUSIVE", "INCLUSION must be INCLUSIVE or NON_INCLUSIVE, got %s\n", inclusion.c_str())
+	this->inclusive = (inclusion == "INCLUSIVE");
 
 	set_INSTRUCTION_LEVELS (INSTRUCTION_LEVELS);
 	set_DATA_LEVELS (DATA_LEVELS);
@@ -248,85 +256,93 @@ inline uint32_t cache_t::searchLru(cacheSet_t *set) {
 	return index;
 }
 
-// Copy data information to lower cache levels when data addresses are valid
-void cache_t::copyLevels(line_t *line, uint32_t idxa, uint32_t idxb, uint32_t processor_id) {
-	if (line->line_ptr_caches[processor_id][idxa]->dirty == 1) {
-		line->line_ptr_caches[processor_id][idxa]->line_ptr_caches[processor_id][idxb]->dirty = line->line_ptr_caches[processor_id][idxa]->dirty;
-		line->line_ptr_caches[processor_id][idxa]->line_ptr_caches[processor_id][idxb]->lru = orcs_engine.get_global_cycle();
-		line->line_ptr_caches[processor_id][idxa]->line_ptr_caches[processor_id][idxb]->ready_at = line->line_ptr_caches[processor_id][idxa]->ready_at;
+// Remove every pointer to and from a line (any core, any level).
+void cache_t::unlink_line(line_t *line, uint32_t line_level) {
+	for (uint32_t p = 0; p < line->get_NUMBER_OF_PROCESSORS(); p++) {
+		for (uint32_t k = 0; k < POINTER_LEVELS; k++) {
+			line_t *other = line->line_ptr_caches[p][k];
+			if (other == NULL) continue;
+			if (other->line_ptr_caches[p][line_level] == line) {
+				other->line_ptr_caches[p][line_level] = NULL;
+			}
+			line->line_ptr_caches[p][k] = NULL;
+		}
 	}
-	line->line_ptr_caches[processor_id][idxa]->clean_line();
 }
 
-// Copy data information to lower cache levels when data addresses are invalid
-void cache_t::copyNextLevels(line_t *line, uint32_t idx, uint32_t processor_id) {
-	line->line_ptr_caches[processor_id][idx]->dirty = line->dirty;
-	line->line_ptr_caches[processor_id][idx]->lru = orcs_engine.get_global_cycle();
-	line->line_ptr_caches[processor_id][idx]->ready_at = line->ready_at;
+// Send a dirty line to DRAM.
+void cache_t::send_writeback(uint64_t memory_address, uint32_t processor_id) {
+	memory_package_t* request = new memory_package_t();
+	request->processor_id = processor_id;
+	request->memory_address = memory_address;
+	request->memory_operation = MEMORY_OPERATION_WRITE;
+	request->memory_size = this->LINE_SIZE;
+	request->is_hive = false;
+	request->is_vima = false;
+	request->status = PACKAGE_STATE_UNTREATED;
+	request->readyAt = orcs_engine.get_global_cycle();
+	request->born_cycle = orcs_engine.get_global_cycle();
+	request->sent_to_ram = false;
+	request->type = DATA;
+	request->op_count[request->memory_operation]++;
+	orcs_engine.memory_controller->requestDRAM(request);
 }
 
-// Writebacks an address from a specific cache to its next lower leveL
-inline void cache_t::writeBack(line_t *line, uint32_t processor_id, uint64_t memory_address) {
-	// printf("writeback in processor %d\n", processor_id);
-	// Se tiver mais de um nível de cache de dados e o programa escrever nela, 
-	// aqui vai dar erro :p
-    for (uint32_t i = this->level + 1; i < DATA_LEVELS - 1; i++) {
-        ERROR_ASSERT_PRINTF(line->line_ptr_caches[processor_id][i] != NULL, "Error, no line reference in next levels.")
-		// Problema JAVAN pode ser detectado aqui.
-    }
-	// L1 writeBack issues
-	if ((this->level == 0) && (this->level != DATA_LEVELS - 1)) {
-		for (uint32_t i = 1; i < DATA_LEVELS; i++) {
-			this->copyNextLevels(line, i, processor_id);
-			line->line_ptr_caches[processor_id][i]->line_ptr_caches[processor_id][this->level] = NULL;//Pointer to Lower Level
-		}
-		line->clean_line();
-	// LLC writeBack issues
-    } else if (this->level == DATA_LEVELS - 1) {
-		// ********************************************************************************
-		// Clear all upper levels with this address
-		// ********************************************************************************
+// Evict a valid line, clean or dirty, before its slot is reused.
+//  1. Upper levels (every core): an inclusive cache removes their copies,
+//     taking their dirty data. Every private level is inclusive; the LLC
+//     follows INCLUSION. A non-inclusive LLC leaves them in place.
+//  2. Dirty data goes to the next level's copy, or to DRAM from the LLC
+//     (or when the next level no longer holds the line).
+//  3. Every pointer to and from the victim is cleared.
+void cache_t::evict(line_t *victim, uint32_t processor_id) {
+	const uint32_t L = this->level;
+	const bool is_llc = (L == DATA_LEVELS - 1);
+	const bool remove_upper = !is_llc || this->inclusive;
+	const uint64_t victim_address = victim->tag << this->offset;
 
-		for (uint32_t i = 0; i < DATA_LEVELS - 1; i++) {
-			if (line->line_ptr_caches[processor_id][i] != NULL) {
-				line->line_ptr_caches[processor_id][i]->clean_line();
+	if (remove_upper) {
+		for (uint32_t p = 0; p < victim->get_NUMBER_OF_PROCESSORS(); p++) {
+			/// Upper copies of this core, nearest level first. A level the
+			/// victim does not point to is found through the level below it.
+			line_t *upper[MAX_NUM_CACHE_LEVELS] = {NULL};
+			for (int32_t u = (int32_t) L - 1; u >= 0; u--) {
+				line_t *copy = victim->line_ptr_caches[p][u];
+				for (uint32_t k = u + 1; copy == NULL && k < L; k++) {
+					if (upper[k] != NULL) copy = upper[k]->line_ptr_caches[p][u];
+				}
+				upper[u] = copy;
+			}
+			for (uint32_t u = 0; u < L; u++) {
+				line_t *copy = upper[u];
+				if (copy == NULL || !copy->valid || copy->tag != victim->tag) continue;
+				if (copy->dirty) victim->dirty = 1;   /// newer data than the victim
+				this->unlink_line(copy, u);
+				copy->clean_line();
+				this->add_cache_back_invalidation();
 			}
 		}
-
-		// *****************************************************************************
-		// Make a write back request to DRAM
-		// *****************************************************************************
-		memory_package_t* request = new memory_package_t();
-    	request->processor_id = processor_id;
-      	request->memory_address = memory_address;
-      	request->memory_operation = MEMORY_OPERATION_WRITE;
-		request->memory_size = this->LINE_SIZE;
-      	request->is_hive = false;
-      	request->is_vima = false;
-      	request->status = PACKAGE_STATE_UNTREATED;
-      	request->readyAt = orcs_engine.get_global_cycle();
-      	request->born_cycle = orcs_engine.get_global_cycle();
-      	request->sent_to_ram = false;
-      	request->type = DATA;
-      	request->op_count[request->memory_operation]++;
-    	orcs_engine.memory_controller->requestDRAM(request);
-	// Intermediate cache levels issues
-	} else {
-		uint32_t i = 0;
-
-        if (line->line_ptr_caches[processor_id][i] != NULL) {
-			copyLevels(line, i, i + 2, processor_id);
-		} else {
-			copyNextLevels(line, i + 2, processor_id);
-
-		}
-		for (uint32_t i = this->level + 1; i < DATA_LEVELS; i++) {
-			for (uint32_t j = 0; j <= this->level; j++) {
-				line->line_ptr_caches[processor_id][i]->line_ptr_caches[processor_id][j] = NULL;
-			}
-		}
-		line->clean_line();
 	}
+
+	if (victim->dirty) {
+		this->add_cache_writeback();
+		bool written = false;
+		if (!is_llc) {
+			for (uint32_t p = 0; p < victim->get_NUMBER_OF_PROCESSORS() && !written; p++) {
+				line_t *next = victim->line_ptr_caches[p][L + 1];
+				if (next != NULL && next->valid && next->tag == victim->tag) {
+					next->dirty = 1;
+					written = true;
+				}
+			}
+		}
+		if (!written) {
+			this->send_writeback(victim_address, processor_id);
+		}
+	}
+
+	this->unlink_line(victim, L);
+	victim->clean_line();
 }
 
 // Searches for a cache line to write data
@@ -356,11 +372,7 @@ line_t* cache_t::installLine(memory_package_t* request, uint32_t latency, uint64
 	if ((int)line == POSITION_FAIL) {
 		line = this->searchLru(&this->sets[idx]);
 		this->add_cache_eviction();
-		if (this->sets[idx].lines[line].dirty == 1) {
-			/// Write back the victim's address (tag = line address), not the incoming one
-			this->writeBack(&this->sets[idx].lines[line], request->processor_id, this->sets[idx].lines[line].tag << this->offset);
-			this->add_cache_writeback();
-		}
+		this->evict(&this->sets[idx].lines[line], request->processor_id);
 	}
 
 	// -----------------------------------------------------------------------------------------
@@ -399,6 +411,10 @@ void cache_t::returnLine(memory_package_t* request, cache_t *cache) {
 		this->sets[idx].lines[line].line_ptr_caches[request->processor_id][cache->level] = line_return;
 		for (uint32_t i = this->level + 1; i < POINTER_LEVELS; i++) {
 			line_return->line_ptr_caches[request->processor_id][i] = this->sets[idx].lines[line].line_ptr_caches[request->processor_id][i];
+			/// Lower levels also point to the new copy, so an eviction finds it
+			if (line_return->line_ptr_caches[request->processor_id][i] != NULL) {
+				line_return->line_ptr_caches[request->processor_id][i]->line_ptr_caches[request->processor_id][cache->level] = line_return;
+			}
 		}
 		line_return->line_ptr_caches[request->processor_id][this->level] = &this->sets[idx].lines[line];
 		// Copy information
@@ -429,10 +445,7 @@ uint32_t cache_t::write(memory_package_t* request){
 		assert(false);
         line = this->searchLru(&this->sets[idx]);
         this->add_cache_eviction();
-        if (this->sets[idx].lines[line].dirty == 1) {
-            this->writeBack(&this->sets[idx].lines[line], request->processor_id, this->sets[idx].lines[line].tag << this->offset);
-            this->add_cache_writeback();
-        }
+        this->evict(&this->sets[idx].lines[line], request->processor_id);
     }
 	ERROR_ASSERT_PRINTF(line != POSITION_FAIL, "Error, line didn't find to be written.")
     this->sets[idx].lines[line].dirty = 1;
@@ -456,6 +469,7 @@ void cache_t::statistics(FILE *output) {
 		fprintf(output, "%d_Cache_Miss:         %lu\n", this->level, this->get_cache_miss());
 		fprintf(output, "%d_Cache_Install:      %lu\n", this->level, this->get_cache_install());
 		fprintf(output, "%d_Cache_Eviction:     %lu\n", this->level, this->get_cache_eviction());
+		fprintf(output, "%d_Cache_Back_Invalidation: %lu\n", this->level, this->get_cache_back_invalidation());
 		fprintf(output, "%d_Cache_Read:         %lu\n", this->level, this->cache_count_per_type[MEMORY_OPERATION_READ]);
 		if (this->cache_hit_per_type[MEMORY_OPERATION_READ] != 0) fprintf(output, "%d_Cache_Read_Hit:     %lu\n", this->level, this->cache_hit_per_type[MEMORY_OPERATION_READ]);
 		if (this->cache_miss_per_type[MEMORY_OPERATION_READ] != 0) fprintf(output, "%d_Cache_Read_Miss:    %lu\n", this->level, this->cache_miss_per_type[MEMORY_OPERATION_READ]);
@@ -489,6 +503,7 @@ void cache_t::reset_statistics() {
 	this->set_cache_miss(0);
 	this->set_cache_eviction(0);
 	this->set_cache_install(0);
+	this->set_cache_back_invalidation(0);
 	for (int32_t i = 0; i < MEMORY_OPERATION_LAST; i++){
 		this->cache_count_per_type[i] = 0;
 		this->cache_hit_per_type[i] = 0;

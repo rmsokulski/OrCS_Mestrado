@@ -331,6 +331,9 @@ int main(int argc, char **argv) {
 
     // *****************************************************************************************
 
+#if CACHE_CHECK
+    orcs_engine.cacheManager->check_consistency();
+#endif
     ORCS_PRINTF("Deleting Trace Reader\n")
     delete[] orcs_engine.trace_reader;
     delete orcs_engine.configuration;

@@ -10,14 +10,15 @@ class cache_t {
         uint64_t cache_access;
         uint64_t cache_eviction;   ///< valid lines replaced (set full, LRU victim)
         uint64_t cache_install;    ///< lines installed (into a free slot or over a victim)
+        uint64_t cache_back_invalidation; ///< upper-level copies removed by this cache's evictions
         uint64_t cache_read;
         uint64_t cache_write;
         uint64_t cache_inst;
         uint64_t cache_writeback;
 
 
-        void copyLevels(line_t *line, uint32_t idxa, uint32_t idxb, uint32_t processor_id);
-        void copyNextLevels(line_t *line, uint32_t idx, uint32_t processor_id);
+        void unlink_line(line_t *line, uint32_t line_level);
+        void send_writeback(uint64_t memory_address, uint32_t processor_id);
 
         uint64_t offset_bits_shift;
         uint64_t index_bits_shift;
@@ -80,7 +81,8 @@ class cache_t {
         void statistics(FILE *output);
         void reset_statistics();
         void allocate(uint32_t NUMBER_OF_PROCESSORS, uint32_t INSTRUCTION_LEVELS, uint32_t DATA_LEVELS);//allocate data structure
-        void writeBack(line_t *line, uint32_t processor_id, uint64_t memory_address);       //makes writeback of line
+        bool inclusive;   ///< LLC only: evicting a line removes its upper-level copies (INCLUSION in CACHE_MEMORY.CONFIG)
+        void evict(line_t *victim, uint32_t processor_id); //remove a valid line before reusing its slot
         void returnLine(memory_package_t* request, cache_t *cache);//return line from lower cache level
         void tagIdxSetCalculation(uint64_t address, uint64_t *idx, uint64_t *tag); //calculate index of data, makes tag from address
         uint32_t searchLru(cacheSet_t *set);//searh LRU to substitue
@@ -107,6 +109,7 @@ class cache_t {
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_inst)
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_writeback)
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_install)
+        INSTANTIATE_GET_SET_ADD(uint64_t,cache_back_invalidation)
         INSTANTIATE_GET_SET_ADD(int32_t,concurrent_cache_accesses)
         INSTANTIATE_GET_SET_ADD(int32_t,max_reached)
         INSTANTIATE_GET_SET_ADD(int32_t,mshr_occupied_entries)

@@ -28,6 +28,8 @@
 #define COMMIT_DEBUG 0
 /// Log "SYNC <cycle> <core> <event> ..." lines for barriers and critical sections
 #define SYNC_DEBUG 0
+/// At the end of the run, check cache pointers and LLC inclusion (slow)
+#define CACHE_CHECK 0
 #define MEMORY_DEBUG 0
 #define CM_DEBUG 0
 #define HIVE_DEBUG 0
