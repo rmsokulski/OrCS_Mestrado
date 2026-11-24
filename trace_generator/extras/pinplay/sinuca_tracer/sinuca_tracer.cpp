@@ -300,11 +300,21 @@ VOID trace_instruction(TRACE trace, VOID *v) {
         RTN_Close(rtn);
     }
 
-    //  SpinLock Static Linked check (its binary has a PAUSE instruction)
-    if (strcmp(rtn_name.c_str(), "omp_get_num_procs") == 0 ||
-        strcmp(rtn_name.c_str(), "gomp_barrier_wait_end") == 0 ||
-        strcmp(rtn_name.c_str(), "gomp_team_barrier_wait_end") == 0) {
-        return;
+    /// libgomp spin-wait loops: how long they spin depends on host timing
+    /// under Pin, not on the simulated machine, and OrCS models the wait from
+    /// the $SYNC markers. Skip them so traces are consistent between runs.
+    static const char *spin_wait_rtns[] = {
+        "omp_get_num_procs",                    // has a PAUSE loop
+        "gomp_barrier_wait_end",                // barrier spin (inlined)
+        "gomp_team_barrier_wait_end",
+        "gomp_team_barrier_wait_cancel_end",
+        "gomp_mutex_lock_slow",                 // critical/lock contention
+        "gomp_sem_wait_slow",                   // ordered, task waits
+        "gomp_ptrlock_get_slow",                // work-share hand-off
+    };
+    for (size_t i = 0; i < sizeof(spin_wait_rtns) / sizeof(*spin_wait_rtns); i++) {
+        if (strcmp(rtn_name.c_str(), spin_wait_rtns[i]) == 0)
+            return;
     }
 
     for (BBL bbl = TRACE_BblHead(trace); BBL_Valid(bbl); bbl = BBL_Next(bbl)) {
