@@ -1134,10 +1134,11 @@ bool cache_manager_t::available (uint32_t processor_id, memory_operation_t op){
 void cache_manager_t::statistics(FILE *output, uint32_t core_id) {
     int32_t *cache_indexes = new int32_t[POINTER_LEVELS]();
 
-	if (output != NULL) {
+	/// The cache manager is shared: print its totals once, with core 0
+	if (output != NULL && core_id == 0) {
         utils_t::largestSeparator(output);
         fprintf(output,"#========================================================================#\n");
-        fprintf(output,"#Cache Manager\n");
+        fprintf(output,"#Cache Manager (all cores)\n");
         fprintf(output,"#========================================================================#\n");
         if (this->get_sent_ram() > 0) {
             fprintf(output, "Total Reads:                       %lu\nTotal Writes:                      %lu\n", this->get_reads(), this->get_writes());
@@ -1175,15 +1176,24 @@ void cache_manager_t::statistics(FILE *output, uint32_t core_id) {
 
     }
 
+    /// Print each cache once, with the first core that uses it
+    /// (core_id < count): private levels in every core, a shared level
+    /// only with core 0, so totals summed over cores are not inflated.
     this->generateIndexArray(core_id, cache_indexes);
     for (uint32_t i = 0; i < INSTRUCTION_LEVELS; i++) {
+        if (core_id >= ICACHE_AMOUNT[i]) continue;
+        if (output != NULL && ICACHE_AMOUNT[i] < NUMBER_OF_PROCESSORS)
+            fprintf(output, "#Shared by %u cores\n", NUMBER_OF_PROCESSORS / ICACHE_AMOUNT[i]);
         this->instruction_cache[i][cache_indexes[i]].statistics(output);
     }
     for (uint32_t i = 0; i < DATA_LEVELS; i++) {
+        if (core_id >= DCACHE_AMOUNT[i]) continue;
+        if (output != NULL && DCACHE_AMOUNT[i] < NUMBER_OF_PROCESSORS)
+            fprintf(output, "#Shared by %u cores\n", NUMBER_OF_PROCESSORS / DCACHE_AMOUNT[i]);
         this->data_cache[i][cache_indexes[i]].statistics(output);
     }
-    // Prefetcher
-    if (PREFETCHER_ACTIVE){
+    // Prefetcher (shared: printed once, with core 0)
+    if (PREFETCHER_ACTIVE && core_id == 0){
         this->prefetcher->statistics(output);
     }
 

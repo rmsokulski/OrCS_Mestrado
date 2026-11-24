@@ -4246,7 +4246,19 @@ void processor_t::statistics(FILE *output)
 		orcs_engine.cacheManager->generateIndexArray(this->processor_id, cache_indexes);
 
 		//assuming you want LLC, plevels-1 should be LLC
-		fprintf(output, "MPKI:                             %lf\n", (float)orcs_engine.cacheManager->data_cache[plevels - 1][cache_indexes[plevels - 1]].get_cache_miss() / ((float)this->fetchCounter / 1000));
+		uint64_t llc_misses = orcs_engine.cacheManager->data_cache[plevels - 1][cache_indexes[plevels - 1]].get_cache_miss();
+		if (orcs_engine.cacheManager->DCACHE_AMOUNT[plevels - 1] < orcs_engine.cacheManager->get_NUMBER_OF_PROCESSORS())
+		{
+			/// Shared LLC: its misses come from every core, so divide by all cores' instructions
+			uint64_t all_fetched = 0;
+			for (uint32_t c = 0; c < orcs_engine.cacheManager->get_NUMBER_OF_PROCESSORS(); c++)
+				all_fetched += orcs_engine.processor[c].fetchCounter;
+			fprintf(output, "MPKI_Shared_LLC_All_Cores:        %lf\n", (float)llc_misses / ((float)all_fetched / 1000));
+		}
+		else
+		{
+			fprintf(output, "MPKI:                             %lf\n", (float)llc_misses / ((float)this->fetchCounter / 1000));
+		}
 		fprintf(output, "Average_wait_cycles_wait_mem_req: %lf\n", (float)this->mem_req_wait_cycles / this->get_stat_inst_load_completed());
 		fprintf(output, "Core_Request_RAM_AVG_Cycle:       %lf\n", (float)this->core_ram_request_wait_cycles / this->get_core_ram_requests());
 		fprintf(output, "Total_Load_Requests:              %lu\n", this->get_stat_inst_load_completed());
