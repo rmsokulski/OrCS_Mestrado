@@ -43,6 +43,15 @@ pin_cmd.extend(["--", command])
 
 base_dir = os.getcwd()
 
+# WORKAROUND: Pin 3.11 crashes on multi-threaded programs with glibc >= 2.34
+# (clone3). noclone3 disables clone3 so glibc falls back to clone.
+# Remove once Pin is upgraded.
+noclone3 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "noclone3")
+noclone3_src = noclone3 + ".c"
+if not os.path.exists(noclone3) or os.path.getmtime(noclone3) < os.path.getmtime(noclone3_src):
+    subprocess.run(["cc", "-O2", noclone3_src, "-o", noclone3], check=True)
+pin_cmd.insert(0, noclone3)
+
 # Execute pin tracer
 os.chdir(tracerFolder)
 env = dict(os.environ, OMP_NUM_THREADS=str(threads))

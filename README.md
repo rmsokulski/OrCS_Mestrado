@@ -69,6 +69,13 @@ Video tutorials showing OrCS+Sinuca_tracer download and configuration:
 [Fast installation](https://asciinema.org/a/78yLzIg0GlXvUngoA8f0lx4Vb)
 [Manual installation](https://asciinema.org/a/mn63H4OW4SY542Xs1p7seEL3M)
 
+### Tracing multi-threaded programs
+`trace_generator/createTrace.py --threads N` and `THREADS=N trace_generator/kernels/run_traces.sh` write one `.tidK.dyn` / `.tidK.mem` trace per thread and set `OMP_NUM_THREADS=N`. Simulate them on an N-core config, passing `-t <trace_base>` N times.
+
+> **Warning: temporary Pin workaround.** Pin 3.11 (2019) predates glibc 2.34, which creates threads with the `clone3` syscall. Under Pin 3.11 any multi-threaded program crashes. Both scripts therefore start Pin through `trace_generator/noclone3`, which makes `clone3` fail with `ENOSYS` so glibc falls back to `clone`; the scripts compile it on first use. Pin 3.11 also cannot load dynamically linked programs on current glibc (`.relr.dyn`), so traced programs must be built with `-static`.
+>
+> **TODO:** upgrade Pin to a release that supports `clone3` and `.relr.dyn`, then remove `noclone3` and the `-static` requirement.
+
 ## Running OrCS
 Before executing OrCS we must download a simulation trace.
 

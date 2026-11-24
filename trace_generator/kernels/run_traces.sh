@@ -12,6 +12,12 @@ THREADS=${THREADS:-1}
 export OMP_NUM_THREADS=$THREADS   # traced program must spawn as many threads as trace files
 OUT=${TRACE_DIR:-$(dirname "$REPO")/traces}
 
+# WORKAROUND: Pin 3.11 crashes on multi-threaded programs with glibc >= 2.34
+# (clone3). noclone3 disables clone3 so glibc falls back to clone.
+# Remove once Pin is upgraded.
+NOCLONE3=$REPO/trace_generator/noclone3
+[ "$NOCLONE3" -nt "$NOCLONE3.c" ] || cc -O2 "$NOCLONE3.c" -o "$NOCLONE3"
+
 if [ $# -gt 0 ]; then KERNELS=("$@"); else
     KERNELS=(); for m in "$HERE"/*/Makefile; do k=$(basename "$(dirname "$m")"); [ "$k" != common ] && KERNELS+=("$k"); done
 fi
@@ -19,6 +25,6 @@ fi
 for k in "${KERNELS[@]}"; do
     make -C "$HERE/$k"
     mkdir -p "$OUT/$k/x86" "$OUT/$k/vima"
-    "$PIN" -t "$TOOL" -trace x86  -orcs_tracing 1 -threads "$THREADS" -output "$OUT/$k/x86/$k.x86"     -- "$HERE/$k/$k.x86"
-    "$PIN" -t "$TOOL" -trace iVIM -orcs_tracing 1 -threads "$THREADS" -output "$OUT/$k/vima/$k.vima2K" -- "$HERE/$k/$k.vima"
+    "$NOCLONE3" "$PIN" -t "$TOOL" -trace x86  -orcs_tracing 1 -threads "$THREADS" -output "$OUT/$k/x86/$k.x86"     -- "$HERE/$k/$k.x86"
+    "$NOCLONE3" "$PIN" -t "$TOOL" -trace iVIM -orcs_tracing 1 -threads "$THREADS" -output "$OUT/$k/vima/$k.vima2K" -- "$HERE/$k/$k.vima"
 done

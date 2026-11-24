@@ -44,3 +44,4 @@ orcs
 #########################
 trace_generator/kernels/*/*.x86
 trace_generator/kernels/*/*.vima
+trace_generator/noclone3
