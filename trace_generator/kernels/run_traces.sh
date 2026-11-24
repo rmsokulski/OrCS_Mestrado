@@ -10,6 +10,7 @@ PIN=${PIN_ROOT:?set PIN_ROOT}/pin
 TOOL=${TOOL:-$REPO/trace_generator/extras/pinplay/bin/intel64/sinuca_tracer.so}
 THREADS=${THREADS:-1}
 export OMP_NUM_THREADS=$THREADS   # traced program must spawn as many threads as trace files
+export OMP_WAIT_POLICY=passive     # waiting threads sleep instead of spinning (faster under Pin)
 OUT=${TRACE_DIR:-$(dirname "$REPO")/traces}
 
 # WORKAROUND: Pin 3.11 crashes on multi-threaded programs with glibc >= 2.34

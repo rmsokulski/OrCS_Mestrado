@@ -12,7 +12,7 @@ if len(sys.argv) < 3:
     print("--controlled_tracing")
     print(" Disable tracing at the program start. So the tracing is disabled and enabled with the ORCS_tracing_start and ORCS_tracing_stop functions.")
     print("--threads N")
-    print(" Number of threads to trace (one dyn/mem trace file per thread). Also sets OMP_NUM_THREADS. Default: 1.")
+    print(" Number of threads to trace (one dyn/mem trace file per thread). Also sets OMP_NUM_THREADS (and OMP_WAIT_POLICY=passive). Default: 1.")
     exit(1)
 
 # Obtaining arguments
@@ -50,5 +50,6 @@ if not os.path.exists(noclone3) or os.path.getmtime(noclone3) < os.path.getmtime
 pin_cmd.insert(0, noclone3)
 
 # Execute pin tracer from the caller's directory: traces are written there
-env = dict(os.environ, OMP_NUM_THREADS=str(threads))
+# passive: waiting threads sleep instead of spinning (faster under Pin)
+env = dict(os.environ, OMP_NUM_THREADS=str(threads), OMP_WAIT_POLICY="passive")
 subprocess.run(pin_cmd, env=env)
