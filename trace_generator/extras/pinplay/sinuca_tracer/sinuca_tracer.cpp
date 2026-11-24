@@ -860,38 +860,6 @@ VOID ImageLoad(IMG img, VOID *) {
             }
             // ~ printf("%s\n", rtn_name.c_str());
 
-            /// Barrier only on Master, insert on all the traces (PARALLEL_END)
-            for (uint32_t i = 0;
-                    i < OMP_barrier_master_end.size() && !found_GOMP; i++) {
-                /// FOUND a Parallel END
-                if (strcmp(rtn_name.c_str(), OMP_barrier_master_end[i]) == 0) {
-                    RTN_Open(rtn);
-
-
-                    RTN_InsertCall(rtn, IPOINT_BEFORE,
-                                    AFUNPTR(handleOrCSTracingEvent),
-                                    IARG_BOOL, true,
-                                    IARG_THREAD_ID,
-                                    IARG_END);
-                    RTN_Close (rtn);
-                    break;
-                }
-            }
-
-            for (uint32_t i = 0; i < ORCS_tracing_control_stop.size(); i++){
-                if (strcmp(rtn_name.c_str(), ORCS_tracing_control_stop[i]) == 0){
-                    RTN_Open (rtn);
-
-                    RTN_InsertCall(rtn, IPOINT_BEFORE,
-                                    AFUNPTR(handleOrCSTracingEvent),
-                                    IARG_BOOL, false,
-                                    IARG_THREAD_ID,
-                                    IARG_END);
-                    RTN_Close (rtn);
-                    break;
-                }
-            }
-
             if (rtn_name.compare(0, 4, "GOMP") == 0) {
                 /// Barrier only on Master, insert on all traces (PARALLEL_START)
                 for (uint32_t i = 0;
