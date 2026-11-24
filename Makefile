@@ -84,10 +84,12 @@ SRC_CORE =  simulator.cpp orcs_engine.cpp\
 ########################################################
 OBJS_CORE = ${SRC_CORE:.cpp=.o}
 OBJS = $(OBJS_CORE)
+# Header dependencies written by the compiler (-MMD -MP)
+DEPS = $(OBJS:.o=.d)
 ########################################################
 # implicit rules
 %.o : %.cpp %.hpp
-	$(CPP) -c $(CPPFLAGS) $< -o $@
+	$(CPP) -c $(CPPFLAGS) -MMD -MP $< -o $@
 
 ########################################################
 
@@ -98,6 +100,7 @@ orcs: $(OBJS_CORE)
 
 clean:
 	-$(RM) $(OBJS)
+	-$(RM) $(DEPS)
 	-$(RM) $(BIN_NAME)
 	@echo OrCS cleaned!
 	@echo
@@ -113,3 +116,6 @@ orcs_vet: clean all
 10K_test:
 	./orcs_vet -c configuration_files/skylake.cfg -t ../simpleVecSum10K > log_debug_10K
 	./orcs_base -c configuration_files/skylake.cfg -t ../simpleVecSum10K > log_debug_base_10K
+
+# Must stay after the first target, or a .d rule becomes the default goal
+-include $(DEPS)
