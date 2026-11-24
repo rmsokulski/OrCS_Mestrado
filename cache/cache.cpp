@@ -19,6 +19,8 @@ cache_t::cache_t() {
     this->cache_writeback = 0;
     this->cache_install = 0;
     this->cache_back_invalidation = 0;
+    this->cache_write_merged = 0;
+    this->cache_write_merged_missing = 0;
     this->inclusive = true;
 	this->is_inst_cache = false;
 
@@ -428,6 +430,22 @@ void cache_t::returnLine(memory_package_t* request, cache_t *cache) {
 }
 
 
+// Mark a line dirty without counting an access (merged writes).
+// Returns false if the line is not in this cache.
+bool cache_t::mark_dirty(uint64_t address) {
+	uint64_t idx, tag;
+	this->tagIdxSetCalculation(address, &idx, &tag);
+	for (size_t i = 0; i < this->sets[idx].n_lines; i++) {
+		line_t *l = &this->sets[idx].lines[i];
+		if (l->valid && l->tag == tag) {
+			l->dirty = 1;
+			l->lru = (l->ready_at <= orcs_engine.get_global_cycle()) ? orcs_engine.get_global_cycle() : l->ready_at + this->latency;
+			return true;
+		}
+	}
+	return false;
+}
+
 // write address
 uint32_t cache_t::write(memory_package_t* request){
 	// printf("write %lu in processor %u\n", request->memory_address, request->processor_id);
@@ -472,6 +490,8 @@ void cache_t::statistics(FILE *output) {
 		fprintf(output, "%d_Cache_Install:      %lu\n", this->level, this->get_cache_install());
 		fprintf(output, "%d_Cache_Eviction:     %lu\n", this->level, this->get_cache_eviction());
 		fprintf(output, "%d_Cache_Back_Invalidation: %lu\n", this->level, this->get_cache_back_invalidation());
+		if (this->get_cache_write_merged() != 0) fprintf(output, "%d_Cache_Write_Merged: %lu\n", this->level, this->get_cache_write_merged());
+		if (this->get_cache_write_merged_missing() != 0) fprintf(output, "%d_Cache_Write_Merged_Missing: %lu\n", this->level, this->get_cache_write_merged_missing());
 		fprintf(output, "%d_Cache_Read:         %lu\n", this->level, this->cache_count_per_type[MEMORY_OPERATION_READ]);
 		if (this->cache_hit_per_type[MEMORY_OPERATION_READ] != 0) fprintf(output, "%d_Cache_Read_Hit:     %lu\n", this->level, this->cache_hit_per_type[MEMORY_OPERATION_READ]);
 		if (this->cache_miss_per_type[MEMORY_OPERATION_READ] != 0) fprintf(output, "%d_Cache_Read_Miss:    %lu\n", this->level, this->cache_miss_per_type[MEMORY_OPERATION_READ]);
@@ -506,6 +526,8 @@ void cache_t::reset_statistics() {
 	this->set_cache_eviction(0);
 	this->set_cache_install(0);
 	this->set_cache_back_invalidation(0);
+	this->set_cache_write_merged(0);
+	this->set_cache_write_merged_missing(0);
 	for (int32_t i = 0; i < MEMORY_OPERATION_LAST; i++){
 		this->cache_count_per_type[i] = 0;
 		this->cache_hit_per_type[i] = 0;

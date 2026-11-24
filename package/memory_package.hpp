@@ -44,6 +44,10 @@ class memory_package_t {
         // This info will be used to guide the type of request created in the DRAM.
         bool is_load_from_write; 
 
+        // Writes of the same core merged into this pending line request by
+        // cache_manager_t::isIn; applied to the L1 in finishRequest
+        uint32_t merged_writes;
+
         // Request many Cache Lines
         std::vector<memory_package_t *> subrequest_from; // This is a subrequest package inside a Cache Level or DRAM
         uint32_t num_subrequests; // This package generated some subrequests. This is the number used to track the ones still in flight
@@ -64,7 +68,7 @@ class memory_package_t {
         void updatePackageTransmit(uint32_t stallTime);
         void updatePackageDRAMFetch(uint32_t stallTime);
         void updatePackageDRAMReady(uint32_t stallTime);
-        void updateClients();
+        void updateClients(uint32_t stallTime = 0);
         void printPackage();
 
         void copy(memory_package_t *other);

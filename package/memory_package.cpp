@@ -46,6 +46,7 @@ memory_package_t::memory_package_t() {
     this->num_subrequests = 0;
 
     this->is_load_from_write = false;
+    this->merged_writes = 0;
 
     memory_operation = MEMORY_OPERATION_LAST;    /// memory operation
 }
@@ -168,13 +169,13 @@ void memory_package_t::printPackage(){
     ORCS_PRINTF ("%lu Address: %lu | Operation: %s | Status: %s | Uop: %lu | ReadyAt: %lu\n", orcs_engine.get_global_cycle(), memory_address, get_enum_memory_operation_char (memory_operation), get_enum_package_state_char (status), uop_number, readyAt)
 }
 
-void memory_package_t::updateClients(){
+void memory_package_t::updateClients(uint32_t stallTime){
     #if MEMORY_REQUESTS_DEBUG
     printf("memory_package_t - updateClients - Updating clients from request [Addr: %lu - Size: %u]\n", this->memory_address, this->memory_size);
     #endif
     
     for (size_t i = 0; i < clients.size(); i++) {
-        clients[i]->updatePackageReady (0);
+        clients[i]->updatePackageReady (stallTime);
     }
 }
 
@@ -225,6 +226,7 @@ void memory_package_t::package_clean() {
     this->num_subrequests = 0;
 
     this->is_load_from_write = false;
+    this->merged_writes = 0;
 
     memory_operation = MEMORY_OPERATION_LAST;    /// memory operation
 }

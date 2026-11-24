@@ -371,6 +371,12 @@ bool cache_manager_t::isIn (memory_package_t* subrequest, memory_package_t* requ
 
             requests[i]->subrequest_from.push_back(request);
             request->num_subrequests++;
+            /// Applied and counted in finishRequest, the last moment this
+            /// request can still receive merges (cross-core: not yet handled)
+            if (subrequest->memory_operation == MEMORY_OPERATION_WRITE &&
+                subrequest->processor_id == requests[i]->processor_id) {
+                requests[i]->merged_writes++;
+            }
             // << Do not change the number of subrequests from the existent request >>
 
             delete subrequest;
@@ -454,6 +460,22 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
         ORCS_PRINTF ("[CACM] %lu {%lu} %lu %s finishes! Took %lu cycles.\n", orcs_engine.get_global_cycle(), request->opcode_number, request->memory_address, get_enum_memory_operation_char (request->memory_operation), orcs_engine.get_global_cycle()-request->born_cycle)
     #endif
     wait_time = (orcs_engine.get_global_cycle() - request->born_cycle);
+
+    /// Writes merged into this request (isIn): it leaves `requests` now, so
+    /// no more can merge. Count them at the L1 and mark the line dirty there,
+    /// or at the first lower level that still holds it.
+    if (request->merged_writes > 0) {
+        cache_t *l1 = &this->data_cache[0][cache_indexes[0]];
+        l1->cache_count_per_type[MEMORY_OPERATION_WRITE] += request->merged_writes;
+        l1->set_cache_write_merged(l1->get_cache_write_merged() + request->merged_writes);
+        bool applied = l1->mark_dirty(request->memory_address);
+        for (uint32_t k = 1; !applied && k < DATA_LEVELS; k++) {
+            applied = this->data_cache[k][cache_indexes[k]].mark_dirty(request->memory_address);
+        }
+        if (!(l1->peek(request->memory_address))) l1->set_cache_write_merged_missing(l1->get_cache_write_merged_missing() + request->merged_writes);
+        request->merged_writes = 0;
+    }
+
     if (request->sent_to_ram && !request->is_hive && !request->is_vima){
         sent_ram++;
         sent_ram_cycles += wait_time;
@@ -579,8 +601,16 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
 
         // Check for the original request ending
         if (request->subrequest_from[i]->num_subrequests == 0) {
+            /// A write merged by isIn (every entry after the first, which
+            /// created this line request) still has to write the L1 once the
+            /// line is there: it pays the L1 hit latency, like a write hit.
+            uint32_t write_latency = 0;
+            if (i > 0 && request->subrequest_from[i]->memory_operation == MEMORY_OPERATION_WRITE &&
+                request->subrequest_from[i]->processor_id == request->processor_id) {
+                write_latency = this->data_cache[0][cache_indexes[0]].latency;
+            }
             request->subrequest_from[i]->updatePackageReady();
-            request->subrequest_from[i]->updateClients();
+            request->subrequest_from[i]->updateClients(write_latency);
             #if MEMORY_REQUESTS_DEBUG
             printf("cacheManager - finishRequest - Completing original request [Addr: %lu - Size: %u]\n", request->subrequest_from[i]->memory_address, request->subrequest_from[i]->memory_size);
             #endif

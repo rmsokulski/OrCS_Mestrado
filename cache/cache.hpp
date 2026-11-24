@@ -11,6 +11,8 @@ class cache_t {
         uint64_t cache_eviction;   ///< valid lines replaced (set full, LRU victim)
         uint64_t cache_install;    ///< lines installed (into a free slot or over a victim)
         uint64_t cache_back_invalidation; ///< upper-level copies removed by this cache's evictions
+        uint64_t cache_write_merged;  ///< writes merged into a pending request (secondary misses)
+        uint64_t cache_write_merged_missing; ///< ... whose line had already left this cache
         uint64_t cache_read;
         uint64_t cache_write;
         uint64_t cache_inst;
@@ -89,6 +91,7 @@ class cache_t {
         bool peek(uint64_t address);
         uint32_t read(uint64_t address, uint32_t &ttc);
         uint32_t write(memory_package_t* request);
+        bool mark_dirty(uint64_t address);
         void printTagIdx(uint64_t address);
         line_t *installLine(memory_package_t* request, uint32_t latency, uint64_t &idx, uint64_t &line); //install line of cache |mem_controller -> caches|
 
@@ -110,6 +113,8 @@ class cache_t {
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_writeback)
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_install)
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_back_invalidation)
+        INSTANTIATE_GET_SET_ADD(uint64_t,cache_write_merged)
+        INSTANTIATE_GET_SET_ADD(uint64_t,cache_write_merged_missing)
         INSTANTIATE_GET_SET_ADD(int32_t,concurrent_cache_accesses)
         INSTANTIATE_GET_SET_ADD(int32_t,max_reached)
         INSTANTIATE_GET_SET_ADD(int32_t,mshr_occupied_entries)
