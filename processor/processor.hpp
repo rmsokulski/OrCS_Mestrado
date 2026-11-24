@@ -89,8 +89,6 @@ class processor_t {
 	uint64_t stat_disambiguation_read_false_positive;
 	uint64_t stat_disambiguation_write_false_positive;
 	uint64_t stat_address_to_address;
-	uint64_t times_reach_parallel_requests_read;
-	uint64_t times_reach_parallel_requests_write;
 	float_t instruction_per_cycle;
 	uint64_t ended_cycle;
 	uint64_t mem_req_wait_cycles;
@@ -226,8 +224,6 @@ class processor_t {
 	uint32_t *INST_LEVEL;
 
 	uint32_t RAM_LATENCY;
-	uint32_t PARALLEL_LIM_ACTIVE;
-	uint32_t MAX_PARALLEL_REQUESTS_CORE;
 
 	uint32_t PREFETCHER_ACTIVE;
 
@@ -458,8 +454,6 @@ class processor_t {
 		INSTANTIATE_GET_SET_ADD(uint64_t,stat_disambiguation_read_false_positive)
 		INSTANTIATE_GET_SET_ADD(uint64_t,stat_disambiguation_write_false_positive)
 		INSTANTIATE_GET_SET_ADD(uint64_t,stat_address_to_address)
-		INSTANTIATE_GET_SET_ADD(uint64_t,times_reach_parallel_requests_read)
-		INSTANTIATE_GET_SET_ADD(uint64_t,times_reach_parallel_requests_write)
 		INSTANTIATE_GET_SET_ADD(float_t,instruction_per_cycle)
 		INSTANTIATE_GET_SET_ADD(uint64_t,ended_cycle)
 		INSTANTIATE_GET_SET_ADD(uint32_t,core_ram_requests)
@@ -580,8 +574,6 @@ class processor_t {
 		INSTANTIATE_GET_SET_ADD(uint32_t,LINE_SIZE)
 
 		INSTANTIATE_GET_SET_ADD(uint32_t,RAM_LATENCY)
-		INSTANTIATE_GET_SET_ADD(uint32_t,PARALLEL_LIM_ACTIVE)
-		INSTANTIATE_GET_SET_ADD(uint32_t,MAX_PARALLEL_REQUESTS_CORE)
 
 		INSTANTIATE_GET_SET_ADD(uint32_t,PREFETCHER_ACTIVE)
 

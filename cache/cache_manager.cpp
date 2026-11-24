@@ -32,7 +32,6 @@ cache_manager_t::cache_manager_t() {
     this->WAIT_CYCLE = 0;
     
     this->NUMBER_OF_PROCESSORS = 0;
-    this->MAX_PARALLEL_REQUESTS_CORE = 0;
 
     this->instruction_prefetches_completed = 0;
 
@@ -214,7 +213,6 @@ void cache_manager_t::allocate(uint32_t NUMBER_OF_PROCESSORS) {
     set_LINE_SIZE(cfg_cache_defs["CONFIG"]["LINE_SIZE"]);
     set_WAIT_CYCLE(cfg_cache_defs["CONFIG"]["WAIT_CYCLE"]);
 
-    set_MAX_PARALLEL_REQUESTS_CORE(cfg_root["MEMORY_CONTROLLER"]["MAX_PARALLEL_REQUESTS_CORE"]);
 
     // -----------------------------------------------------------------------------------------
     // Verificação da flag prefetcher_ins_next_line_disabled

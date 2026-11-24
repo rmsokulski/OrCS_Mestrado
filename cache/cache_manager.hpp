@@ -42,7 +42,6 @@ class cache_manager_t {
         uint32_t WAIT_CYCLE;
 
         uint32_t NUMBER_OF_PROCESSORS;
-        uint32_t MAX_PARALLEL_REQUESTS_CORE;
 
 
         std::vector<memory_package_t*> ongoing_requests;
@@ -129,7 +128,6 @@ class cache_manager_t {
         INSTANTIATE_GET_SET_ADD(uint32_t, WAIT_CYCLE)
 
         INSTANTIATE_GET_SET_ADD(uint32_t, NUMBER_OF_PROCESSORS)
-        INSTANTIATE_GET_SET_ADD(uint32_t, MAX_PARALLEL_REQUESTS_CORE)
         INSTANTIATE_GET_SET_ADD(uint64_t, instruction_prefetches_completed)
 
 

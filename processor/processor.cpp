@@ -34,8 +34,6 @@ processor_t::processor_t()
 	this->stat_disambiguation_read_false_positive = 0;
 	this->stat_disambiguation_write_false_positive = 0;
 	this->stat_address_to_address = 0;
-	this->times_reach_parallel_requests_read = 0;
-	this->times_reach_parallel_requests_write = 0;
 	this->instruction_per_cycle = 0;
 	this->ended_cycle = 0;
 	this->mem_req_wait_cycles = 0;
@@ -169,8 +167,6 @@ processor_t::processor_t()
 	this->INST_LEVEL = NULL;
 	// I$
 	this->RAM_LATENCY = 0;
-	this->PARALLEL_LIM_ACTIVE = 0;
-	this->MAX_PARALLEL_REQUESTS_CORE = 0;
 
 	this->PREFETCHER_ACTIVE = 0;
 
@@ -494,12 +490,6 @@ void processor_t::allocate()
 		exit(1);
 	}
 
-	// Memory controller defaults
-	libconfig::Setting &cfg_memory = cfg_root["MEMORY_CONTROLLER"];
-
-	set_PARALLEL_LIM_ACTIVE(cfg_memory["PARALLEL_LIM_ACTIVE"]);
-	set_MAX_PARALLEL_REQUESTS_CORE(cfg_memory["MAX_PARALLEL_REQUESTS_CORE"]);
-
 	// Prefetcher defaults
 	libconfig::Setting &cfg_prefetcher = cfg_root["PREFETCHER"];
 
@@ -561,8 +551,6 @@ void processor_t::allocate()
 	this->set_stat_disambiguation_read_false_positive(0);
 	this->set_stat_disambiguation_write_false_positive(0);
 	this->set_stat_address_to_address(0);
-	this->set_times_reach_parallel_requests_read(0);
-	this->set_times_reach_parallel_requests_write(0);
 	this->set_ended_cycle(0);
 	this->set_mem_req_wait_cycles(0);
 	this->set_core_ram_request_wait_cycles(0);
@@ -3628,7 +3616,6 @@ uint32_t processor_t::mob_read()
 		}
 		else
 		{
-			this->add_times_reach_parallel_requests_read();
 			delete request;
 		}
 
@@ -3905,7 +3892,6 @@ uint32_t processor_t::mob_write()
 		}
 		else
 		{
-			this->add_times_reach_parallel_requests_write();
 			delete request;
 		}
 
@@ -4365,9 +4351,6 @@ void processor_t::printConfiguration()
 
 		fprintf(output, "===============RAM ============\n");
 		fprintf(output, "RAM_LATENCY ->%u\n", RAM_LATENCY);
-		fprintf(output, "=============== Limits ============\n");
-		fprintf(output, "PARALLEL_LIM_ACTIVE ->%u\n", PARALLEL_LIM_ACTIVE);
-		fprintf(output, "MAX_PARALLEL_REQUESTS_CORE ->%u\n", MAX_PARALLEL_REQUESTS_CORE);
 	}
 }
 
