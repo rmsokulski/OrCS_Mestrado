@@ -197,14 +197,12 @@ class processor_t {
 	uint32_t LINE_SIZE;
 	uint32_t CACHE_LEVELS;
 
-	uint32_t DATA_CACHES;
 	uint32_t *DATA_SIZE;
 	uint32_t *DATA_ASSOCIATIVITY;
 	uint32_t *DATA_LATENCY;
 	uint32_t *DATA_SETS;
 	uint32_t *DATA_LEVEL;
 	// I$
-	uint32_t INSTRUCTION_CACHES;
 	uint32_t *INST_SIZE;
 	uint32_t *INST_ASSOCIATIVITY;
 	uint32_t *INST_LATENCY;
@@ -574,8 +572,6 @@ class processor_t {
 
 		INSTANTIATE_GET_SET_ADD(uint32_t,WAIT_CYCLE)
 
-		INSTANTIATE_GET_SET_ADD(uint32_t,INSTRUCTION_CACHES)
-		INSTANTIATE_GET_SET_ADD(uint32_t,DATA_CACHES)
 		INSTANTIATE_GET_SET_ADD(uint32_t,CACHE_LEVELS)
 		
 		// ====================================================================

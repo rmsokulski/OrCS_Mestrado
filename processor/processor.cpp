@@ -149,7 +149,6 @@ processor_t::processor_t()
 	//this->MEGA = KILO*KILO = 0;
 
 	this->LINE_SIZE = 0;
-	this->DATA_CACHES = 0;
 	this->DATA_SIZE = NULL;
 	this->DATA_ASSOCIATIVITY = NULL;
 	this->DATA_LATENCY = NULL;
@@ -162,7 +161,6 @@ processor_t::processor_t()
 	this->INST_SETS = NULL;
 	this->INST_LEVEL = NULL;
 	// I$
-	this->INSTRUCTION_CACHES = 0;
 	this->RAM_LATENCY = 0;
 	this->PARALLEL_LIM_ACTIVE = 0;
 	this->MAX_PARALLEL_REQUESTS_CORE = 0;
@@ -295,6 +293,7 @@ uint32_t processor_t::get_cache_list(cacheId_t cache_type, libconfig::Setting &c
 	// Get the list of caches
 	libconfig::Setting &cfg_caches = cfg_cache_defs[string_cache_type];
 	uint32_t N_CACHES = cfg_caches.getLength();
+	uint32_t n_levels = 0;
 
 	ASSOCIATIVITY = new uint32_t[N_CACHES]();
 	LATENCY = new uint32_t[N_CACHES]();
@@ -313,6 +312,8 @@ uint32_t processor_t::get_cache_list(cacheId_t cache_type, libconfig::Setting &c
 			SIZE[i] = cfg_cache["SIZE"];
 			SETS[i] = ((SIZE[i] / LINE_SIZE) / ASSOCIATIVITY[i]);
 			LEVEL[i] = cfg_cache["LEVEL"];
+			if (LEVEL[i] + 1 > n_levels)
+				n_levels = LEVEL[i] + 1;
 		}
 		catch (libconfig::SettingNotFoundException const &nfex)
 		{
@@ -329,7 +330,9 @@ uint32_t processor_t::get_cache_list(cacheId_t cache_type, libconfig::Setting &c
 	delete[] SIZE;
 	delete[] SETS;
 	delete[] LEVEL;
-	return N_CACHES;
+	/// Number of cache levels (not of caches: with N cores each private
+	/// level has N entries in the list).
+	return n_levels;
 }
 
 // =====================================================================
@@ -474,13 +477,10 @@ void processor_t::allocate()
 	libconfig::Setting &cfg_cache_mem = cfg_root["CACHE_MEMORY"];
 	set_LINE_SIZE(cfg_cache_mem["CONFIG"]["LINE_SIZE"]);
 
-	uint32_t n_caches = get_cache_list(INSTRUCTION, cfg_cache_mem, INST_ASSOCIATIVITY, INST_LATENCY, INST_SIZE, INST_SETS, INST_LEVEL);
-	set_INSTRUCTION_CACHES(n_caches);
+	uint32_t inst_levels = get_cache_list(INSTRUCTION, cfg_cache_mem, INST_ASSOCIATIVITY, INST_LATENCY, INST_SIZE, INST_SETS, INST_LEVEL);
+	uint32_t data_levels = get_cache_list(DATA, cfg_cache_mem, DATA_ASSOCIATIVITY, DATA_LATENCY, DATA_SIZE, DATA_SETS, DATA_LEVEL);
 
-	n_caches = get_cache_list(DATA, cfg_cache_mem, DATA_ASSOCIATIVITY, DATA_LATENCY, DATA_SIZE, DATA_SETS, DATA_LEVEL);
-	set_DATA_CACHES(n_caches);
-
-	set_CACHE_LEVELS((INSTRUCTION_CACHES > DATA_CACHES) ? INSTRUCTION_CACHES : DATA_CACHES);
+	set_CACHE_LEVELS((inst_levels > data_levels) ? inst_levels : data_levels);
 
 	if (CACHE_LEVELS > MAX_NUM_CACHE_LEVELS) {
 		printf("ALERT: Adjust the definition defines.hpp: MAX_NUM_CACHE_LEVELS to at least %u\n", CACHE_LEVELS);
@@ -4187,21 +4187,30 @@ void processor_t::statistics(FILE *output)
 
 void processor_t::printCache(FILE *output)
 {
+	cache_manager_t *cm = orcs_engine.cacheManager;
 	fprintf(output, "===============Instruction $============\n");
-	for (uint32_t i = 0; i < INSTRUCTION_CACHES; i++)
+	for (uint32_t i = 0; i < cm->get_INSTRUCTION_LEVELS(); i++)
 	{
-		fprintf(output, "%u SIZE -> %u\n", i, orcs_engine.cacheManager->instruction_cache[i]->size);
-		fprintf(output, "%u ASSOCIATIVITY -> %u\n", i, orcs_engine.cacheManager->instruction_cache[i]->associativity);
-		fprintf(output, "%u LATENCY -> %u\n", i, orcs_engine.cacheManager->instruction_cache[i]->latency);
-		fprintf(output, "%u SETS -> %u\n\n",  i, orcs_engine.cacheManager->instruction_cache[i]->n_sets);
+		for (uint32_t j = 0; j < cm->ICACHE_AMOUNT[i]; j++)
+		{
+			cache_t *c = &cm->instruction_cache[i][j];
+			fprintf(output, "%u.%u SIZE -> %u\n", i, j, c->size);
+			fprintf(output, "%u.%u ASSOCIATIVITY -> %u\n", i, j, c->associativity);
+			fprintf(output, "%u.%u LATENCY -> %u\n", i, j, c->latency);
+			fprintf(output, "%u.%u SETS -> %u\n\n", i, j, c->n_sets);
+		}
 	}
 	fprintf(output, "==================Data $================\n");
-	for (uint32_t i = 0; i < DATA_CACHES; i++)
+	for (uint32_t i = 0; i < cm->get_DATA_LEVELS(); i++)
 	{
-		fprintf(output, "%u SIZE -> %u\n",i, orcs_engine.cacheManager->data_cache[i]->size);
-		fprintf(output, "%u ASSOCIATIVITY -> %u\n", i, orcs_engine.cacheManager->data_cache[i]->associativity);
-		fprintf(output, "%u LATENCY -> %u\n", i, orcs_engine.cacheManager->data_cache[i]->latency);
-		fprintf(output, "%u SETS -> %u\n\n", i, orcs_engine.cacheManager->data_cache[i]->n_sets);
+		for (uint32_t j = 0; j < cm->DCACHE_AMOUNT[i]; j++)
+		{
+			cache_t *c = &cm->data_cache[i][j];
+			fprintf(output, "%u.%u SIZE -> %u\n", i, j, c->size);
+			fprintf(output, "%u.%u ASSOCIATIVITY -> %u\n", i, j, c->associativity);
+			fprintf(output, "%u.%u LATENCY -> %u\n", i, j, c->latency);
+			fprintf(output, "%u.%u SETS -> %u\n\n", i, j, c->n_sets);
+		}
 	}
 }
 
