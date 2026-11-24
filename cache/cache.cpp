@@ -418,7 +418,9 @@ void cache_t::returnLine(memory_package_t* request, cache_t *cache) {
 		}
 		line_return->line_ptr_caches[request->processor_id][this->level] = &this->sets[idx].lines[line];
 		// Copy information
-		line_return->dirty = line_return->line_ptr_caches[request->processor_id][this->level]->dirty;
+		/// The lower level keeps the dirty data: the new copy starts clean, and
+		/// becomes dirty only if this core writes it (cache_t::write)
+		line_return->dirty = 0;
 		line_return->lru = line_return->line_ptr_caches[request->processor_id][this->level]->lru;
 		line_return->prefetched = line_return->line_ptr_caches[request->processor_id][this->level]->prefetched;
 		line_return->ready_at = orcs_engine.get_global_cycle();
