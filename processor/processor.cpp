@@ -4,6 +4,12 @@
 processor_t::processor_t()
 {
 	this->stall_full_FetchBuffer = 0;
+	this->pending_sync = SYNC_NONE;
+	this->sync_arrived = false;
+	this->sync_generation = 0;
+	this->stall_sync = 0;
+	this->sync_barriers = 0;
+	this->sync_locks = 0;
 	this->stall_wrong_branch = 0;
 	//=============
 	//Statistics Decode
@@ -1045,6 +1051,40 @@ uint64_t processor_t::get_instruction_stores_stride(opcode_package_t *operation,
 uint64_t fetch_CacheManager_Inst_requests = 0;
 uint64_t instructions_mshr_stall = 0;
 
+// =====================================================================
+/// Resolve the pending sync marker, if any.
+/// Returns false while fetch must keep waiting.
+bool processor_t::sync_ready()
+{
+	sync_manager_t *sm = orcs_engine.sync_manager;
+	switch (this->pending_sync)
+	{
+	case SYNC_BARRIER:
+		if (!this->sync_arrived)
+		{
+			this->sync_generation = sm->barrier_arrive();
+			this->sync_arrived = true;
+		}
+		if (!sm->barrier_released(this->sync_generation))
+			return false;
+		this->sync_arrived = false;
+		this->sync_barriers++;
+		break;
+	case SYNC_CRITICAL_START:
+		if (!sm->lock_acquire(this->processor_id))
+			return false;
+		this->sync_locks++;
+		break;
+	case SYNC_CRITICAL_END:
+		sm->lock_release(this->processor_id);
+		break;
+	default: /// SYNC_NONE, or markers with no effect (WAIT_CRITICAL_START, FREE)
+		break;
+	}
+	this->pending_sync = SYNC_NONE;
+	return true;
+}
+
 void processor_t::fetch()
 {
 
@@ -1056,6 +1096,15 @@ void processor_t::fetch()
 	// Trace ->fetchBuffer
 	for (uint32_t i = 0; i < FETCH_WIDTH; i++)
 	{
+		//=============================
+		//Stall at a sync marker until the sync manager lets this core go
+		//=============================
+		if (!this->sync_ready())
+		{
+			this->add_stall_sync();
+			break;
+		}
+
 		if (!orcs_engine.cacheManager->available(this->processor_id, MEMORY_OPERATION_INST))
 		{
 			instructions_mshr_stall++;
@@ -1097,10 +1146,11 @@ void processor_t::fetch()
 
 			//=============================
 			//Sync marker: not an instruction, does not use a fetch slot.
-			//Ignored for now (handled by the sync manager later).
+			//sync_ready() at the top of the loop handles it.
 			//=============================
 			if (operation.sync_type != SYNC_NONE)
 			{
+				this->pending_sync = operation.sync_type;
 				i--;
 				continue;
 			}
@@ -4150,6 +4200,9 @@ void processor_t::statistics(FILE *output)
 		fprintf(output, "Total_VIMA_Instructions:          %lu\n", this->get_stat_inst_vima_completed());
 		utils_t::largestSeparator(output);
 		fprintf(output, "Stalls Fetch:          %lu\n", this->get_stall_full_FetchBuffer());
+		fprintf(output, "Stalls Sync:          %lu\n", this->get_stall_sync());
+		fprintf(output, "Sync Barriers:          %lu\n", this->sync_barriers);
+		fprintf(output, "Sync Critical Sections:          %lu\n", this->sync_locks);
 		fprintf(output, "Stalls Decode:          %lu\n", this->get_stall_full_DecodeBuffer());
 		fprintf(output, "Stalls Rename:          %lu\n", this->get_stall_full_ROB());
 		fprintf(output, "Stalls Full MOB Read:          %lu\n", this->get_stall_full_MOB_Read());

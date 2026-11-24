@@ -40,6 +40,8 @@ class orcs_engine_t {
         memory_controller_t *memory_controller;
         hive_controller_t *hive_controller;
         vima_controller_t *vima_controller;
+        //Barriers and critical sections shared by all cores
+        sync_manager_t *sync_manager;
 
         // Instruction set
         instruction_set_t *instruction_set;

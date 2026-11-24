@@ -342,6 +342,7 @@ int main(int argc, char **argv) {
     delete orcs_engine.hive_controller;
     ORCS_PRINTF("Deleting VIMA Controller\n")
     delete orcs_engine.vima_controller;
+    delete orcs_engine.sync_manager;
     ORCS_PRINTF("Deleting Memory Controller\n")
     delete orcs_engine.memory_controller;
     ORCS_PRINTF("Deleting Processor\n")

@@ -29,6 +29,8 @@ void orcs_engine_t::allocate(uint32_t NUMBER_OF_PROCESSORS) {
 	this->hive_controller = new hive_controller_t();
 	this->vima_controller = new vima_controller_t();
     this->instruction_set = new instruction_set_t;
+	this->sync_manager = new sync_manager_t();
+	this->sync_manager->allocate(NUMBER_OF_PROCESSORS);
 }
 
 bool orcs_engine_t::get_simulation_alive(uint32_t NUMBER_OF_PROCESSORS) {

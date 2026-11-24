@@ -112,6 +112,8 @@ class hive_register_t;
 // VIMA Classes
 //  =========================================//
 class vima_controller_t;
+// ============================================================================
+class sync_manager_t;
 class vima_vector_t;
 //  =========================================//
 // DATA Types
@@ -197,6 +199,9 @@ extern orcs_engine_t orcs_engine;
 // // MemoryController INCLUDES
 #include "./main_memory/memory_channel.hpp"
 #include "./main_memory/memory_controller.hpp"
+//  =========================================//
+// // Synchronization (barrier / critical section)
+#include "./sync/sync_manager.hpp"
 //  =========================================//
 // // HIVE INCLUDES
 #include "./hive/hive_controller.hpp"

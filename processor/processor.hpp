@@ -52,6 +52,16 @@ class processor_t {
     uint64_t stall_full_FetchBuffer;
     uint64_t stall_wrong_branch;
 	//=============
+	//Synchronization (barrier / critical section)
+	//=============
+	sync_type_t pending_sync;   ///< marker fetch is stopped at, SYNC_NONE = none
+	bool sync_arrived;          ///< already arrived at the pending barrier
+	uint64_t sync_generation;   ///< barrier generation this core waits for
+	uint64_t stall_sync;        ///< cycles fetch waited at a sync marker
+	uint64_t sync_barriers;     ///< barriers passed
+	uint64_t sync_locks;        ///< critical sections entered
+	bool sync_ready();
+	//=============
 	//Statistics Decode
 	//=============
     uint64_t stall_full_DecodeBuffer;
@@ -430,6 +440,7 @@ class processor_t {
 		INSTANTIATE_GET_SET_ADD(uint64_t,registerWrite)
 		/////
 		INSTANTIATE_GET_SET_ADD(uint64_t,stall_full_FetchBuffer)
+		INSTANTIATE_GET_SET_ADD(uint64_t,stall_sync)
 		INSTANTIATE_GET_SET_ADD(uint64_t,stall_wrong_branch)
 		INSTANTIATE_GET_SET_ADD(uint64_t,stall_full_DecodeBuffer)
 		INSTANTIATE_GET_SET_ADD(uint64_t,stall_full_MOB_Read)

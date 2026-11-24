@@ -65,6 +65,8 @@ SRC_VIMA = $(FD_VIMA)/vima_controller.cpp\
 
 SRC_CONFIG = $(FD_CONFIG)/config.cpp
 
+SRC_SYNC = sync/sync_manager.cpp
+
 SRC_CORE =  simulator.cpp orcs_engine.cpp\
 			$(SRC_TRACE_READER)\
 			$(SRC_PACKAGE)\
@@ -79,6 +81,7 @@ SRC_CORE =  simulator.cpp orcs_engine.cpp\
 			$(SRC_PREFETCHER)\
 			$(SRC_CONFIG)\
 			$(SRC_MEMORY)\
+			$(SRC_SYNC)\
 			$(SRC_EMC)
 
 ########################################################
