@@ -360,7 +360,11 @@ bool cache_manager_t::isIn (memory_package_t* subrequest, memory_package_t* requ
     uint64_t tag = (subrequest->memory_address >> this->offset);
     //ORCS_PRINTF ("%lu %s\n", tag, get_enum_memory_operation_char (request->memory_operation))
     for (i = 0; i < requests.size(); i++){
-        if ((requests[i]->memory_address >> this->offset) == tag && requests[i]->type == subrequest->type) {
+        /// Same core only: the line is installed in the requesting core's
+        /// private caches, and a merge takes no MSHR entry, so a request from
+        /// another core must make its own miss (and use its own MSHRs)
+        if ((requests[i]->memory_address >> this->offset) == tag && requests[i]->type == subrequest->type &&
+            requests[i]->processor_id == subrequest->processor_id) {
             #if MEMORY_DEBUG
                 ORCS_PRINTF ("will be forwarded by %lu %s.\n", requests[i]->memory_address, get_enum_memory_operation_char (requests[i]->memory_operation))
             #endif
@@ -372,9 +376,8 @@ bool cache_manager_t::isIn (memory_package_t* subrequest, memory_package_t* requ
             requests[i]->subrequest_from.push_back(request);
             request->num_subrequests++;
             /// Applied and counted in finishRequest, the last moment this
-            /// request can still receive merges (cross-core: not yet handled)
-            if (subrequest->memory_operation == MEMORY_OPERATION_WRITE &&
-                subrequest->processor_id == requests[i]->processor_id) {
+            /// request can still receive merges
+            if (subrequest->memory_operation == MEMORY_OPERATION_WRITE) {
                 requests[i]->merged_writes++;
             }
             // << Do not change the number of subrequests from the existent request >>
@@ -605,8 +608,7 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
             /// created this line request) still has to write the L1 once the
             /// line is there: it pays the L1 hit latency, like a write hit.
             uint32_t write_latency = 0;
-            if (i > 0 && request->subrequest_from[i]->memory_operation == MEMORY_OPERATION_WRITE &&
-                request->subrequest_from[i]->processor_id == request->processor_id) {
+            if (i > 0 && request->subrequest_from[i]->memory_operation == MEMORY_OPERATION_WRITE) {
                 write_latency = this->data_cache[0][cache_indexes[0]].latency;
             }
             request->subrequest_from[i]->updatePackageReady();
