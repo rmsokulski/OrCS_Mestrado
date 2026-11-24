@@ -8,6 +8,7 @@ processor_t::processor_t()
 	this->sync_arrived = false;
 	this->sync_generation = 0;
 	this->stall_sync = 0;
+	this->stall_sync_drain = 0;
 	this->sync_barriers = 0;
 	this->sync_locks = 0;
 	this->stall_wrong_branch = 0;
@@ -1052,11 +1053,37 @@ uint64_t fetch_CacheManager_Inst_requests = 0;
 uint64_t instructions_mshr_stall = 0;
 
 // =====================================================================
+/// True when no instruction older than the current fetch point is in flight.
+bool processor_t::pipeline_empty()
+{
+	return this->fetchBuffer.is_empty() &&
+		   this->decodeBuffer.is_empty() &&
+		   this->reorderBuffer.robUsed == 0 &&
+		   this->memory_order_buffer_read_used == 0 &&
+		   this->memory_order_buffer_write_used == 0 &&
+		   this->memory_order_buffer_hive_used == 0 &&
+		   this->memory_order_buffer_vima_used == 0;
+}
+
+// =====================================================================
 /// Resolve the pending sync marker, if any.
 /// Returns false while fetch must keep waiting.
+/// A sync point takes effect only after every older instruction has
+/// committed (drain), so no work crosses it out of order.
 bool processor_t::sync_ready()
 {
 	sync_manager_t *sm = orcs_engine.sync_manager;
+
+	/// Drain before arriving, acquiring or releasing
+	bool acts = (this->pending_sync == SYNC_BARRIER && !this->sync_arrived) ||
+				this->pending_sync == SYNC_CRITICAL_START ||
+				this->pending_sync == SYNC_CRITICAL_END;
+	if (acts && !this->pipeline_empty())
+	{
+		this->stall_sync_drain++;
+		return false;
+	}
+
 	switch (this->pending_sync)
 	{
 	case SYNC_BARRIER:
@@ -4201,6 +4228,7 @@ void processor_t::statistics(FILE *output)
 		utils_t::largestSeparator(output);
 		fprintf(output, "Stalls Fetch:          %lu\n", this->get_stall_full_FetchBuffer());
 		fprintf(output, "Stalls Sync:          %lu\n", this->get_stall_sync());
+		fprintf(output, "Stalls Sync Drain:          %lu\n", this->stall_sync_drain);
 		fprintf(output, "Sync Barriers:          %lu\n", this->sync_barriers);
 		fprintf(output, "Sync Critical Sections:          %lu\n", this->sync_locks);
 		fprintf(output, "Stalls Decode:          %lu\n", this->get_stall_full_DecodeBuffer());

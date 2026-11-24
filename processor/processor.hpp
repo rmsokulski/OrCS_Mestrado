@@ -58,9 +58,11 @@ class processor_t {
 	bool sync_arrived;          ///< already arrived at the pending barrier
 	uint64_t sync_generation;   ///< barrier generation this core waits for
 	uint64_t stall_sync;        ///< cycles fetch waited at a sync marker
+	uint64_t stall_sync_drain;  ///< ... of which draining the pipeline
 	uint64_t sync_barriers;     ///< barriers passed
 	uint64_t sync_locks;        ///< critical sections entered
 	bool sync_ready();
+	bool pipeline_empty();
 	//=============
 	//Statistics Decode
 	//=============
