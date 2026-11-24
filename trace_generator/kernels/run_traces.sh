@@ -9,6 +9,7 @@ REPO=$(cd "$HERE/../.." && pwd)
 PIN=${PIN_ROOT:?set PIN_ROOT}/pin
 TOOL=${TOOL:-$REPO/trace_generator/extras/pinplay/bin/intel64/sinuca_tracer.so}
 THREADS=${THREADS:-1}
+export OMP_NUM_THREADS=$THREADS   # traced program must spawn as many threads as trace files
 OUT=${TRACE_DIR:-$(dirname "$REPO")/traces}
 
 if [ $# -gt 0 ]; then KERNELS=("$@"); else

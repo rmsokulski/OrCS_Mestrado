@@ -13,7 +13,7 @@ if len(sys.argv) < 3:
     print("--controlled_tracing")
     print(" Disable tracing at the program start. So the tracing is disabled and enabled with the ORCS_tracing_start and ORCS_tracing_stop functions.")
     print("--threads N")
-    print(" Number of threads to trace (one dyn/mem trace file per thread). Default: 1.")
+    print(" Number of threads to trace (one dyn/mem trace file per thread). Also sets OMP_NUM_THREADS. Default: 1.")
     exit(1)
 
 # Obtaining arguments
@@ -42,7 +42,8 @@ base_dir = os.getcwd()
 
 # Execute pin tracer
 os.chdir(tracerFolder)
-subprocess.run(pin_cmd)
+env = dict(os.environ, OMP_NUM_THREADS=str(threads))
+subprocess.run(pin_cmd, env=env)
 
 # Move Traces
 files = glob.glob(f"{output_name}.*.gz")
