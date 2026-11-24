@@ -1124,6 +1124,16 @@ int main(int argc, char *argv[]) {
     max_threads = KnobNumberThreads.Value();
     printf("GCC Threads = %d\n", max_threads);
 
+    /// The "last active thread" check in control_instrumented_bbl reads the
+    /// other threads' flags without the lock (locking it would slow every BBL)
+    if (KnobParallelStart.Value() >= 0 && KnobParallelEnd.Value() >= 0
+            && max_threads > 1) {
+        fprintf(stderr, "WARNING: -parallel_start and -parallel_end are both "
+                "set: if two threads leave the traced region at the same time, "
+                "the early exit after the last region may be skipped and the "
+                "program runs to the end. The traces are not affected.\n");
+    }
+
     /// Initialize the pin lock
     PIN_InitLock(&lock);
     thread_data = new thread_data_t[max_threads];
