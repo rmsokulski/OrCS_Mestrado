@@ -286,11 +286,13 @@ void cache_manager_t::generateIndexArray(uint32_t processor_id, int32_t *cache_i
     uint32_t i;
 
     for (i = 0; i < DATA_LEVELS; i++) {
-        cache_indexes[i] = (int32_t) processor_id & (DCACHE_AMOUNT[i] - 1);
+        cache_indexes[i] = (int32_t) (processor_id % DCACHE_AMOUNT[i]);
     }
 
+    // Instruction levels below DATA_LEVELS reuse the data index above:
+    // assumes each such level has as many I-caches as D-caches.
     for (; i < POINTER_LEVELS; i++) {
-        cache_indexes[i] = (int32_t) processor_id & (ICACHE_AMOUNT[i] - 1);
+        cache_indexes[i] = (int32_t) (processor_id % ICACHE_AMOUNT[i]);
     }
 }
 
