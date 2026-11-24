@@ -29,7 +29,8 @@ int main() {
 #endif
     ORCS_tracing_stop();
 
-    int r = (int)c[N - 1];   // keep the result live
+    volatile float sink = c[N - 1];   // keep the result live
+    (void)sink;
     free(a); free(b); free(c);
-    return r;
+    return 0;   // non-zero would be propagated by Pin and abort run_traces.sh
 }
