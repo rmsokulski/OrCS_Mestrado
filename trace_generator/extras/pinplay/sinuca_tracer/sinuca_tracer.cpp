@@ -724,7 +724,7 @@ VOID ImageLoad(IMG img, VOID *) {
                         // ~ // std::string tempStr = sync_str.str();
                         // ~ // INS_InsertCall(ins, IPOINT_TAKEN_BRANCH,
                         /*                  AFUNPTR(DynamicOMP_char),
-                                            IARG_PTR, tempStr.c_str(),
+                                            IARG_PTR, tempStr,
                                             IARG_THREAD_ID,
                                             IARG_BOOL, false,
                                             IARG_END); */
@@ -823,10 +823,11 @@ VOID ImageLoad(IMG img, VOID *) {
                                         IARG_THREAD_ID,
                                         IARG_END);
 
-                        std::string tempStr = sync_str.str();
+                        /// Pin keeps the pointer for the whole run: copy to the heap
+                        char *tempStr = strdup(sync_str.str().c_str());
                         RTN_InsertCall(rtn, IPOINT_BEFORE,
                                         AFUNPTR(DynamicOMP_char),
-                                        IARG_PTR, tempStr.c_str(),
+                                        IARG_PTR, tempStr,
                                         IARG_THREAD_ID,
                                         IARG_BOOL, true,
                                         IARG_END);
@@ -851,10 +852,11 @@ VOID ImageLoad(IMG img, VOID *) {
                         sprintf(sync_str, "#%s\n", rtn_name.c_str());
                         sprintf(sync_str, "%s$%u\n", sync_str, SYNC_BARRIER);
                         */
-                        std::string tempStr = sync_str.str();
+                        /// Pin keeps the pointer for the whole run: copy to the heap
+                        char *tempStr = strdup(sync_str.str().c_str());
                         RTN_InsertCall(rtn, IPOINT_BEFORE,
                                         AFUNPTR(DynamicOMP_char),
-                                        IARG_PTR, tempStr.c_str(),
+                                        IARG_PTR, tempStr,
                                         IARG_THREAD_ID,
                                         IARG_BOOL, false,
                                         IARG_END);
@@ -879,10 +881,11 @@ VOID ImageLoad(IMG img, VOID *) {
                         sprintf(sync_str, "#%s\n", rtn_name.c_str());
                         sprintf(sync_str, "%s$%u\n", sync_str, SYNC_CRITICAL_START);
                         */
-                        std::string tempStr = sync_str.str();
+                        /// Pin keeps the pointer for the whole run: copy to the heap
+                        char *tempStr = strdup(sync_str.str().c_str());
                         RTN_InsertCall(rtn, IPOINT_BEFORE,
                                         AFUNPTR(DynamicOMP_char),
-                                        IARG_PTR, tempStr.c_str(),
+                                        IARG_PTR, tempStr,
                                         IARG_THREAD_ID,
                                         IARG_BOOL, false,
                                         IARG_END);
@@ -907,10 +910,11 @@ VOID ImageLoad(IMG img, VOID *) {
                         sprintf(sync_str, "#%s\n", rtn_name.c_str());
                         sprintf(sync_str, "%s$%u\n", sync_str, SYNC_CRITICAL_END);
                         */
-                        std::string tempStr = sync_str.str();
+                        /// Pin keeps the pointer for the whole run: copy to the heap
+                        char *tempStr = strdup(sync_str.str().c_str());
                         RTN_InsertCall(rtn, IPOINT_BEFORE,
                                         AFUNPTR(DynamicOMP_char),
-                                        IARG_PTR, tempStr.c_str(),
+                                        IARG_PTR, tempStr,
                                         IARG_THREAD_ID,
                                         IARG_BOOL, false,
                                         IARG_END);
@@ -982,10 +986,11 @@ VOID ImageLoad(IMG img, VOID *) {
                         sprintf(sync_str, "#%s\n", rtn_name.c_str());
                         sprintf(sync_str, "%s$%u\n", sync_str, SYNC_BARRIER);
                         */
-                        std::string tempStr = sync_str.str();
+                        /// Pin keeps the pointer for the whole run: copy to the heap
+                        char *tempStr = strdup(sync_str.str().c_str());
                         RTN_InsertCall(rtn, IPOINT_BEFORE,
                                         AFUNPTR(DynamicOMP_char),
-                                        IARG_PTR, tempStr.c_str(),
+                                        IARG_PTR, tempStr,
                                         IARG_THREAD_ID,
                                         IARG_BOOL, true,
                                         IARG_END);
