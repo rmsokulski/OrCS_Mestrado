@@ -382,12 +382,14 @@ bool trace_reader_t::trace_string_to_opcode(char *input_string, opcode_package_t
 
 
 // =====================================================================
-bool trace_reader_t::trace_next_dynamic(uint32_t *next_bbl) {
+/// Returns either a BBL (*next_bbl != 0) or a sync marker (*sync != SYNC_NONE).
+bool trace_reader_t::trace_next_dynamic(uint32_t *next_bbl, sync_type_t *sync) {
     static char file_line[TRACE_LINE_SIZE];
     file_line[0] = '\0';
 
     bool valid_dynamic = false;
     *next_bbl = 0;
+    *sync = SYNC_NONE;
 
     while (!valid_dynamic) {
         /// Obtain the next trace line
@@ -406,7 +408,11 @@ bool trace_reader_t::trace_next_dynamic(uint32_t *next_bbl) {
         }
         else if (file_line[0] == '$') {
             DEBUG_PRINTF("Dynamic trace line (synchronization): %s\n", file_line);
-            continue;
+            char *end;
+            uint32_t code = strtoul(file_line + 1, &end, 10);
+            ERROR_ASSERT_PRINTF(end != file_line + 1 && code <= SYNC_FREE, "Invalid synchronization line %s\n", file_line);
+            *sync = (sync_type_t)code;
+            valid_dynamic = true;
         }
         else {
             /// BBL is always greater than 0
@@ -759,12 +765,19 @@ bool trace_reader_t::trace_fetch(opcode_package_t *m) {
     opcode_package_t NewOpcode;
     bool success;
     uint32_t new_BBL;
+    sync_type_t sync;
 
     // =================================================================
     /// Fetch new BBL inside the dynamic file.
     // =================================================================
     if (!this->is_inside_bbl) {
-        success = this->trace_next_dynamic(&new_BBL);
+        success = this->trace_next_dynamic(&new_BBL, &sync);
+        if (success && sync != SYNC_NONE) {
+            /// Sync marker: hand it over as a non-instruction package
+            m->package_clean();
+            m->sync_type = sync;
+            return OK;
+        }
         if (success) {
             this->currect_bbl = new_BBL;
             this->currect_opcode = 0;

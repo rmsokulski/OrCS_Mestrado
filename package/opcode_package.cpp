@@ -73,6 +73,8 @@ void opcode_package_t::package_clean() {
     this->hive_read2 = 0;
     this->hive_write = 0;
 
+    this->sync_type = SYNC_NONE;
+
     //====Control
     this->readyAt = 0;
     this->status = PACKAGE_STATE_FREE;

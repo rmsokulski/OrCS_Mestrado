@@ -214,4 +214,15 @@ enum branch_prediction_method_t {
     BRANCH_PREDICTION_METHOD_PIECEWISE
 };
 // ============================================================================
+/// Synchronization markers ($N lines in the dynamic trace).
+/// Values match the tracer's enum in sinuca_tracer.cpp.
+enum sync_type_t {
+    SYNC_NONE = -1,
+    SYNC_BARRIER = 0,
+    SYNC_WAIT_CRITICAL_START = 1,
+    SYNC_CRITICAL_START = 2,
+    SYNC_CRITICAL_END = 3,
+    SYNC_FREE = 4
+};
+
 #endif

@@ -1095,6 +1095,16 @@ void processor_t::fetch()
 				break;
 			}
 
+			//=============================
+			//Sync marker: not an instruction, does not use a fetch slot.
+			//Ignored for now (handled by the sync manager later).
+			//=============================
+			if (operation.sync_type != SYNC_NONE)
+			{
+				i--;
+				continue;
+			}
+
 			// * ============================ * //
 
 			//============================

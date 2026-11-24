@@ -44,7 +44,7 @@ class trace_reader_t {
         void generate_binary_dict();
 
         bool trace_string_to_opcode(char *input_string, opcode_package_t *opcode);
-        bool trace_next_dynamic(uint32_t *next_bbl);
+        bool trace_next_dynamic(uint32_t *next_bbl, sync_type_t *sync);
         bool trace_next_memory(uint64_t *next_address, uint32_t *operation_size, bool *is_read);
         uint32_t trace_next_num_accesses();
         bool spike_next(opcode_package_t *m); // RISC-V tracer

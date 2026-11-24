@@ -40,6 +40,10 @@ class opcode_package_t : public memory_request_client_t {
 
         bool is_vima;
 
+        /// SYNC_NONE for a real instruction; otherwise this package only
+        /// carries a sync marker and is not an instruction.
+        sync_type_t sync_type = SYNC_NONE;
+
 
         // ====================================================================
         /// Status Control
