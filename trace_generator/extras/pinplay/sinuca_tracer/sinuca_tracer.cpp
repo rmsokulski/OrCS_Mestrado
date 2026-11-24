@@ -431,12 +431,13 @@ VOID Fini(INT32 code, VOID *v) {
         gzclose(thread_data[i].gzMemoryTraceFile);
     }
 
-    /// GOMP_parallel ends its region internally (GOMP_parallel_end is not
-    /// called in static builds), so those regions get no end marker.
+    /// Region ends are found through libgomp's internal gomp_team_* symbols,
+    /// present in static builds; a stripped dynamic libgomp may lack them.
     if (seen_parallel_start != seen_parallel_end) {
         fprintf(stderr, "WARNING: %d parallel region(s) started but only %d "
-                "ended: regions opened by GOMP_parallel have no end marker "
-                "in the traces.\n", seen_parallel_start, seen_parallel_end);
+                "ended: gomp_team_end was not found (dynamic libgomp?), so "
+                "some regions have no end marker in the traces.\n",
+                seen_parallel_start, seen_parallel_end);
     }
 }
 
@@ -627,9 +628,9 @@ VOID ImageLoad(IMG img, VOID *) {
         OMP_barrier_master_start.push_back("GOMP_parallel_sections_start");
         OMP_barrier_master_start.push_back("GOMP_parallel_sections");
 
-    /// End of a parallel region. Called explicitly after GOMP_parallel_start
-    /// (GCC < 4.9) and internally by most combined GOMP_parallel_* calls;
-    /// with static linking GOMP_parallel itself may inline it (no marker).
+    /// End of a parallel region (GCC < 4.9). Known, so not reported as an
+    /// unknown GOMP call, but it writes nothing: every region's end is
+    /// marked from the implicit barrier (see gomp_team_* below).
     std::vector<const char*> OMP_barrier_master_end;
         OMP_barrier_master_end.push_back("GOMP_parallel_end");
 
@@ -884,6 +885,43 @@ VOID ImageLoad(IMG img, VOID *) {
                 }
             }
 
+            /// End of a parallel region. Every thread of the team calls
+            /// gomp_team_barrier_wait_final (the implicit barrier) after its
+            /// part of the region: each one writes $0 to its own trace.
+            if (rtn_name == "gomp_team_barrier_wait_final") {
+                RTN_Open(rtn);
+                RTN_InsertCall(rtn, IPOINT_BEFORE,
+                                AFUNPTR(DynamicOMP_char),
+                                IARG_PTR, strdup("#gomp_team_barrier_wait_final\n$0\n"),
+                                IARG_THREAD_ID,
+                                IARG_BOOL, false,
+                                IARG_END);
+                RTN_Close(rtn);
+                continue;
+            }
+
+            /// Count the end of the region in the master, right after it
+            /// leaves the implicit barrier: every thread has written its $0,
+            /// so -parallel_end cannot turn tracing off before that.
+            /// (Not IPOINT_AFTER: gomp_team_end may leave through a tail jump.)
+            if (rtn_name == "gomp_team_end") {
+                RTN final_rtn = RTN_FindByName(img, "gomp_team_barrier_wait_final");
+                RTN_Open(rtn);
+                for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins)) {
+                    if (RTN_Valid(final_rtn) && INS_IsDirectCall(ins)
+                            && INS_DirectControlFlowTargetAddress(ins) == RTN_Address(final_rtn)
+                            && INS_Valid(INS_Next(ins))) {
+                        INS_InsertCall(INS_Next(ins), IPOINT_BEFORE,
+                                        AFUNPTR(handleParallelControlEvent),
+                                        IARG_BOOL, false,
+                                        IARG_THREAD_ID,
+                                        IARG_END);
+                    }
+                }
+                RTN_Close(rtn);
+                continue;
+            }
+
             if (rtn_name.compare(0, 4, "GOMP") != 0) {
                 continue;
             }
@@ -1041,7 +1079,7 @@ VOID ImageLoad(IMG img, VOID *) {
                     }
                 }
 
-                /// OMP_barrier_master_end is matched below, not unknown
+                /// OMP_barrier_master_end is known, not unknown
                 bool is_master_end = false;
                 for (uint32_t i = 0; i < OMP_barrier_master_end.size(); i++) {
                     if (strcmp(rtn_name.c_str(), OMP_barrier_master_end[i]) == 0) {
@@ -1071,40 +1109,6 @@ VOID ImageLoad(IMG img, VOID *) {
 
                 // ~ printf("%s\n", rtn_name.c_str());s
 
-                /// Barrier only on Master, insert on all the traces (PARALLEL_END)
-                for (uint32_t i = 0; i < OMP_barrier_master_end.size() && !found_GOMP; i++) {
-                    /// FOUND a Parallel END
-                    if (strcmp(rtn_name.c_str(), OMP_barrier_master_end[i]) == 0) {
-                        RTN_Open(rtn);
-
-                        std::stringstream sync_str;
-                        sync_str << "#" << rtn_name.c_str() << "\n"         \
-                                << "$" << SYNC_BARRIER      << "\n";
-                        /*
-                        char *sync_str = new char[TRACE_LINE_SIZE];
-                        sprintf(sync_str, "#%s\n", rtn_name.c_str());
-                        sprintf(sync_str, "%s$%u\n", sync_str, SYNC_BARRIER);
-                        */
-                        /// Pin keeps the pointer for the whole run: copy to the heap
-                        char *tempStr = strdup(sync_str.str().c_str());
-                        RTN_InsertCall(rtn, IPOINT_BEFORE,
-                                        AFUNPTR(DynamicOMP_char),
-                                        IARG_PTR, tempStr,
-                                        IARG_THREAD_ID,
-                                        IARG_BOOL, true,
-                                        IARG_END);
-                        /// Parallel End
-                        RTN_InsertCall(rtn, IPOINT_BEFORE,
-                                        AFUNPTR(handleParallelControlEvent),
-                                        IARG_BOOL, false,
-                                        IARG_THREAD_ID,
-                                        IARG_END);
-
-                        RTN_Close(rtn);
-                        found_GOMP = true;
-                        break;
-                    }
-                }
             }
             
         }
