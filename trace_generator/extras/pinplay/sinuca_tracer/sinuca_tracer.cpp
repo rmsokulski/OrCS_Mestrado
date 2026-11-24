@@ -181,7 +181,7 @@ VOID control_instrumented_bbl(THREADID threadid) {
     TRACE_GENERATOR_DEBUG_PRINTF("write_dynamic_char()\n");
 
     if ((KnobNumberInst.Value() != -1)
-    && (count_inst >= KnobNumberInst.Value())) {
+    && (__atomic_load_n(&count_inst, __ATOMIC_RELAXED) >= KnobNumberInst.Value())) {
         thread_data[threadid].is_instrumented_bbl = false;
         PIN_ExitApplication(EXIT_SUCCESS);
     }
@@ -281,7 +281,8 @@ VOID unknown_memory_size_f(PIN_MULTI_MEM_ACCESS_INFO* multi_size, UINT32 bbl,
 }
 
 VOID count_instructions(ADDRINT addins, THREADID tid) {
-    count_inst += addins;
+    /// Threads add concurrently: a plain += loses updates
+    __atomic_fetch_add(&count_inst, (int64_t)addins, __ATOMIC_RELAXED);
 }
 
 //==============================================================================
