@@ -9,6 +9,7 @@ class sync_manager_t {
         uint32_t arrived;        ///< cores waiting at the current barrier
         uint64_t generation;     ///< number of barriers opened so far
         int32_t lock_owner;      ///< core holding the critical section, -1 = free
+        void open_if_complete();
 
     public:
         sync_manager_t();
@@ -22,6 +23,10 @@ class sync_manager_t {
         /// Enter the critical section; false while another core holds it.
         bool lock_acquire(uint32_t core);
         void lock_release(uint32_t core);
+
+        /// A core finished its trace: it counts as arrived at every later
+        /// barrier, so the other cores do not wait for it forever.
+        void retire(uint32_t core);
 };
 
 #endif // SYNC_MANAGER_H

@@ -1168,6 +1168,8 @@ void processor_t::fetch()
 			if (!orcs_engine.trace_reader[this->processor_id].trace_fetch(&operation))
 			{
 				this->traceIsOver = true;
+				/// No more barriers from this core: do not let others wait for it
+				orcs_engine.sync_manager->retire(this->processor_id);
 				break;
 			}
 
