@@ -558,7 +558,14 @@ VOID handleControlEvent(CONTROLLER::EVENT_TYPE ev, VOID *val, CONTEXT * ctxt,
 VOID ThreadStart(THREADID threadid, CONTEXT *ctxt, INT32 flags, VOID *v) {
     TRACE_GENERATOR_DEBUG_PRINTF("ThreadStart()\n");
     PIN_GetLock(&lock, threadid);
-        ASSERTX(threadid < max_threads);
+        if (threadid >= max_threads) {
+            fprintf(stderr, "ERROR: thread %u started, but -threads is %u "
+                    "(valid IDs 0..%u). Trace with more threads "
+                    "(--threads / THREADS) or set OMP_NUM_THREADS to match.\n",
+                    (unsigned)threadid, (unsigned)max_threads,
+                    (unsigned)max_threads - 1);
+            PIN_ExitProcess(1);
+        }
     PIN_ReleaseLock(&lock);
 }
 
