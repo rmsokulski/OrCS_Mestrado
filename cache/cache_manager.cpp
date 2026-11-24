@@ -355,6 +355,14 @@ void cache_manager_t::installCacheLines(memory_package_t* request, int32_t *cach
     delete[] CACHE_TAGS;
 }
 
+// Operation a cache level records in its statistics. A write that missed
+// the L1 is a line fetch (write-allocate) for every level below it: they
+// count it as a read. Only writebacks are writes below the L1.
+static inline memory_operation_t stat_operation(memory_package_t *request, uint32_t level) {
+    if (request->memory_operation == MEMORY_OPERATION_WRITE && level > 0) return MEMORY_OPERATION_READ;
+    return request->memory_operation;
+}
+
 bool cache_manager_t::isIn (memory_package_t* subrequest, memory_package_t* request){
     if (subrequest->is_hive || subrequest->is_vima) return false;
     uint64_t tag = (subrequest->memory_address >> this->offset);
@@ -558,9 +566,10 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
                 }
 
 
-                this->data_cache[i][cache_indexes[i]].total_per_type[request->memory_operation] += wait_time_levels;
-                if (wait_time_levels > this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation] = wait_time_levels;
-                if (wait_time_levels < this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation] = wait_time_levels;
+                memory_operation_t op = stat_operation(request, this->data_cache[i][cache_indexes[i]].level);
+                this->data_cache[i][cache_indexes[i]].total_per_type[op] += wait_time_levels;
+                if (wait_time_levels > this->data_cache[i][cache_indexes[i]].max_per_type[op]) this->data_cache[i][cache_indexes[i]].max_per_type[op] = wait_time_levels;
+                if (wait_time_levels < this->data_cache[i][cache_indexes[i]].min_per_type[op]) this->data_cache[i][cache_indexes[i]].min_per_type[op] = wait_time_levels;
                 ERROR_ASSERT_PRINTF (this->data_cache[i][cache_indexes[i]].concurrent_cache_accesses > -1, "VALUE BECOMES NEGATIVE")
             }
         }
@@ -582,9 +591,10 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
                     this->data_cache[i][cache_indexes[i]].set_mshr_stall(false);
                 }
 
-                this->data_cache[i][cache_indexes[i]].total_per_type[request->memory_operation] += wait_time_levels;
-                if (wait_time_levels > this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].max_per_type[request->memory_operation] = wait_time_levels;
-                if (wait_time_levels < this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation]) this->data_cache[i][cache_indexes[i]].min_per_type[request->memory_operation] = wait_time_levels;
+                memory_operation_t op = stat_operation(request, this->data_cache[i][cache_indexes[i]].level);
+                this->data_cache[i][cache_indexes[i]].total_per_type[op] += wait_time_levels;
+                if (wait_time_levels > this->data_cache[i][cache_indexes[i]].max_per_type[op]) this->data_cache[i][cache_indexes[i]].max_per_type[op] = wait_time_levels;
+                if (wait_time_levels < this->data_cache[i][cache_indexes[i]].min_per_type[op]) this->data_cache[i][cache_indexes[i]].min_per_type[op] = wait_time_levels;
                 ERROR_ASSERT_PRINTF (this->data_cache[i][cache_indexes[i]].concurrent_cache_accesses > -1, "VALUE BECOMES NEGATIVE")
             }
         }
@@ -670,12 +680,8 @@ void cache_manager_t::install (memory_package_t* request){
             this->installCacheLines(request, cache_indexes, 0, DATA);
 
             // -----------------------------------------------------------------------------------------
-            // Propaga a escrita para todos os níveis de cache
+            // The write happens in the L1 only; the levels below just fetched the line
             // -----------------------------------------------------------------------------------------
-            int cache_level = DATA_LEVELS - 1;
-            for (int32_t k = cache_level - 1; k >= 0; k--) {
-                this->data_cache[k+1][cache_indexes[k+1]].add_cache_write();
-            }
             this->data_cache[0][cache_indexes[0]].write(request);
             break;
         }
@@ -941,7 +947,7 @@ cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t
         return MSHR_STALL;
     }
 
-    cache->cache_count_per_type[request->memory_operation]++;
+    cache->cache_count_per_type[stat_operation(request, cache->level)]++;
 
     // -----------------------------------------------------------------------------------------
     // Marca que foi enviado ao nível next_level e em que ciclo isso aconteceu.
@@ -1015,7 +1021,7 @@ cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t
 
         request->updatePackageWait(ttc);
         request->next_level++;
-        cache->cache_hit_per_type[request->memory_operation]++;
+        cache->cache_hit_per_type[stat_operation(request, cache->level)]++;
 
         return HIT;
     }
@@ -1046,7 +1052,7 @@ cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t
     if (request->memory_operation == MEMORY_OPERATION_WRITE) {
         request->is_load_from_write = true;
     }
-    cache->cache_miss_per_type[request->memory_operation]++;
+    cache->cache_miss_per_type[stat_operation(request, cache->level)]++;
     return MISS;
 }
 
