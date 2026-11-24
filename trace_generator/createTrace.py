@@ -35,7 +35,10 @@ while flag_id < len(sys.argv):
     flag_id += 1
 
 
-pin_cmd = ["../../../pin", "-t", "../bin/intel64/sinuca_tracer.so", "-trace", "x86", "-output", f"{output_name}", "-orcs_tracing", ("1" if controlled_tracing else "0"), "-threads", str(threads)]
+pin_cmd = ["../../../pin", "-t", "../bin/intel64/sinuca_tracer.so", "-trace", "x86", "-output", f"{output_name}", "-threads", str(threads)]
+if controlled_tracing:
+    # 1 = trace only between ORCS_tracing_start/stop; omitted (-1) = whole program
+    pin_cmd.extend(["-orcs_tracing", "1"])
 pin_cmd.extend(["--", command])
 
 base_dir = os.getcwd()
