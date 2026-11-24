@@ -8,12 +8,12 @@ class cache_t {
         uint64_t cache_hit;
         uint64_t cache_miss;
         uint64_t cache_access;
-        uint64_t cache_eviction;
+        uint64_t cache_eviction;   ///< valid lines replaced (set full, LRU victim)
+        uint64_t cache_install;    ///< lines installed (into a free slot or over a victim)
         uint64_t cache_read;
         uint64_t cache_write;
         uint64_t cache_inst;
         uint64_t cache_writeback;
-        uint64_t change_line;
 
 
         void copyLevels(line_t *line, uint32_t idxa, uint32_t idxb, uint32_t processor_id);
@@ -106,7 +106,7 @@ class cache_t {
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_write)
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_inst)
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_writeback)
-        INSTANTIATE_GET_SET_ADD(uint64_t,change_line)
+        INSTANTIATE_GET_SET_ADD(uint64_t,cache_install)
         INSTANTIATE_GET_SET_ADD(int32_t,concurrent_cache_accesses)
         INSTANTIATE_GET_SET_ADD(int32_t,max_reached)
         INSTANTIATE_GET_SET_ADD(int32_t,mshr_occupied_entries)

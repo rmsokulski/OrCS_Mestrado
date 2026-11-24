@@ -17,7 +17,7 @@ cache_t::cache_t() {
     this->cache_read = 0;
     this->cache_write = 0;
     this->cache_writeback = 0;
-    this->change_line = 0;
+    this->cache_install = 0;
 	this->is_inst_cache = false;
 
 	this->mshr_occupied_entries = 0;
@@ -108,7 +108,7 @@ void cache_t::allocate(uint32_t NUMBER_OF_PROCESSORS, uint32_t INSTRUCTION_LEVEL
     this->set_cache_read(0);
     this->set_cache_write(0);
     this->set_cache_writeback(0);
-	this->set_change_line(0);
+	this->set_cache_install(0);
 	this->set_concurrent_cache_accesses(0);
 	this->set_max_reached(0);
 	this->set_mshr_occupied_entries(0);
@@ -355,7 +355,7 @@ line_t* cache_t::installLine(memory_package_t* request, uint32_t latency, uint64
     // -----------------------------------------------------------------------------------------
 	if ((int)line == POSITION_FAIL) {
 		line = this->searchLru(&this->sets[idx]);
-		this->add_change_line();
+		this->add_cache_eviction();
 		if (this->sets[idx].lines[line].dirty == 1) {
 			/// Write back the victim's address (tag = line address), not the incoming one
 			this->writeBack(&this->sets[idx].lines[line], request->processor_id, this->sets[idx].lines[line].tag << this->offset);
@@ -372,7 +372,7 @@ line_t* cache_t::installLine(memory_package_t* request, uint32_t latency, uint64
 	this->sets[idx].lines[line].dirty = 0;
 	this->sets[idx].lines[line].prefetched = 0;
 	this->sets[idx].lines[line].ready_at = orcs_engine.get_global_cycle() + latency;
-	this->add_cache_eviction();
+	this->add_cache_install();
 	return &this->sets[idx].lines[line];
 }
 
@@ -428,7 +428,7 @@ uint32_t cache_t::write(memory_package_t* request){
 		printf("Nunca deveria entrar aqui!!! (além disso essa parte do código está errada [Javan])\n");
 		assert(false);
         line = this->searchLru(&this->sets[idx]);
-        this->add_change_line();
+        this->add_cache_eviction();
         if (this->sets[idx].lines[line].dirty == 1) {
             this->writeBack(&this->sets[idx].lines[line], request->processor_id, this->sets[idx].lines[line].tag << this->offset);
             this->add_cache_writeback();
@@ -454,6 +454,7 @@ void cache_t::statistics(FILE *output) {
 		fprintf(output, "%d_Cache_Access:       %lu\n", this->level, this->get_cache_access());
 		fprintf(output, "%d_Cache_Hits:         %lu\n", this->level, this->get_cache_hit());
 		fprintf(output, "%d_Cache_Miss:         %lu\n", this->level, this->get_cache_miss());
+		fprintf(output, "%d_Cache_Install:      %lu\n", this->level, this->get_cache_install());
 		fprintf(output, "%d_Cache_Eviction:     %lu\n", this->level, this->get_cache_eviction());
 		fprintf(output, "%d_Cache_Read:         %lu\n", this->level, this->cache_count_per_type[MEMORY_OPERATION_READ]);
 		if (this->cache_hit_per_type[MEMORY_OPERATION_READ] != 0) fprintf(output, "%d_Cache_Read_Hit:     %lu\n", this->level, this->cache_hit_per_type[MEMORY_OPERATION_READ]);
@@ -487,6 +488,7 @@ void cache_t::reset_statistics() {
 	this->set_cache_hit(0);
 	this->set_cache_miss(0);
 	this->set_cache_eviction(0);
+	this->set_cache_install(0);
 	for (int32_t i = 0; i < MEMORY_OPERATION_LAST; i++){
 		this->cache_count_per_type[i] = 0;
 		this->cache_hit_per_type[i] = 0;
