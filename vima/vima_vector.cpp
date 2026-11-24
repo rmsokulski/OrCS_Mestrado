@@ -153,6 +153,9 @@ void vima_vector_t::allocate() {
     for (size_t i = 0; i < get_no_sub_requests(); i++) {
         sub_requests[i].is_vima = true;
         sub_requests[i].status = PACKAGE_STATE_FREE;
+        // requestDRAM() splits by memory_size; size 0 on an aligned address
+        // creates no DRAM sub-requests and the fetch never completes.
+        sub_requests[i].memory_size = get_LINE_SIZE();
     }
 
     taken = false;
