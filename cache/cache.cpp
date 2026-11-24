@@ -357,7 +357,8 @@ line_t* cache_t::installLine(memory_package_t* request, uint32_t latency, uint64
 		line = this->searchLru(&this->sets[idx]);
 		this->add_change_line();
 		if (this->sets[idx].lines[line].dirty == 1) {
-			this->writeBack(&this->sets[idx].lines[line], request->processor_id, request->memory_address);
+			/// Write back the victim's address (tag = line address), not the incoming one
+			this->writeBack(&this->sets[idx].lines[line], request->processor_id, this->sets[idx].lines[line].tag << this->offset);
 			this->add_cache_writeback();
 		}
 	}
@@ -429,7 +430,7 @@ uint32_t cache_t::write(memory_package_t* request){
         line = this->searchLru(&this->sets[idx]);
         this->add_change_line();
         if (this->sets[idx].lines[line].dirty == 1) {
-            this->writeBack(&this->sets[idx].lines[line], request->processor_id, request->memory_address);
+            this->writeBack(&this->sets[idx].lines[line], request->processor_id, this->sets[idx].lines[line].tag << this->offset);
             this->add_cache_writeback();
         }
     }
