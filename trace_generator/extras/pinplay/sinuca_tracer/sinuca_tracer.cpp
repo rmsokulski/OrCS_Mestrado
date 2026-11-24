@@ -114,6 +114,9 @@ LOCALVAR CONTROLLER::CONTROL_MANAGER control;
 uint32_t max_threads = 0;       /// Max number of threads (if intel Add +1)
 
 int32_t count_parallel_start = 0;
+/// Parallel regions seen, whatever the -parallel_start/end knobs say
+int32_t seen_parallel_start = 0;
+int32_t seen_parallel_end = 0;
 int32_t count_parallel_end = 0;
 int64_t count_inst = 0;
 
@@ -422,6 +425,14 @@ VOID Fini(INT32 code, VOID *v) {
 
         gzclose(thread_data[i].gzMemoryTraceFile);
     }
+
+    /// GOMP_parallel ends its region internally (GOMP_parallel_end is not
+    /// called in static builds), so those regions get no end marker.
+    if (seen_parallel_start != seen_parallel_end) {
+        fprintf(stderr, "WARNING: %d parallel region(s) started but only %d "
+                "ended: regions opened by GOMP_parallel have no end marker "
+                "in the traces.\n", seen_parallel_start, seen_parallel_end);
+    }
 }
 
 //==============================================================================
@@ -429,6 +440,12 @@ VOID Fini(INT32 code, VOID *v) {
 //==============================================================================
 VOID handleParallelControlEvent(bool is_start, THREADID threadid) {
     TRACE_GENERATOR_DEBUG_PRINTF("handleParallelControlEvent()\n");
+
+    /// Only the master calls this, but take the lock to be safe
+    PIN_GetLock(&lock, threadid);
+        if (is_start) seen_parallel_start++;
+        else seen_parallel_end++;
+    PIN_ReleaseLock(&lock);
 
     /// If no parallel instrumentation was done => return
     if (KnobParallelStart.Value() < 0 && KnobParallelEnd.Value() < 0)
