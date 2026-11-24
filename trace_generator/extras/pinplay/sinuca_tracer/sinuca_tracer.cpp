@@ -64,14 +64,8 @@ KNOB<BOOL>KnobLogger(KNOB_MODE_WRITEONCE,  KNOB_FAMILY,
 
 
 // ============================================================================
-/// Enumerates the synchronization type required by the dynamic trace.
-enum sync_t {
-    SYNC_BARRIER,
-    SYNC_WAIT_CRITICAL_START,
-    SYNC_CRITICAL_START,
-    SYNC_CRITICAL_END,
-    SYNC_FREE
-};
+/// Synchronization markers ($N lines): sync_type_t in utils/enumerations.hpp,
+/// shared with the OrCS trace reader.
 
 // #ifdef TRACE_GENERATOR_DEBUG
 //     #define TRACE_GENERATOR_DEBUG_PRINTF(...) DEBUG_PRINTF(__VA_ARGS__);
