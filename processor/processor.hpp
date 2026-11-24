@@ -63,6 +63,10 @@ class processor_t {
 	uint64_t sync_locks;        ///< critical sections entered
 	bool sync_ready();
 	bool pipeline_empty();
+#if SYNC_DEBUG
+	uint64_t last_store_commit = 0;  ///< cycle of this core's last committed store
+	bool log_next_load = false;      ///< log the first load sent after a barrier
+#endif
 	//=============
 	//Statistics Decode
 	//=============

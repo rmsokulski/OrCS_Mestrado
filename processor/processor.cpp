@@ -1091,19 +1091,32 @@ bool processor_t::sync_ready()
 		{
 			this->sync_generation = sm->barrier_arrive();
 			this->sync_arrived = true;
+#if SYNC_DEBUG
+			ORCS_PRINTF("SYNC %lu %lu ARRIVE %lu last_store_commit=%lu\n", orcs_engine.get_global_cycle(), this->processor_id, this->sync_generation, this->last_store_commit)
+#endif
 		}
 		if (!sm->barrier_released(this->sync_generation))
 			return false;
 		this->sync_arrived = false;
 		this->sync_barriers++;
+#if SYNC_DEBUG
+		ORCS_PRINTF("SYNC %lu %lu PASS %lu\n", orcs_engine.get_global_cycle(), this->processor_id, this->sync_generation)
+		this->log_next_load = true;
+#endif
 		break;
 	case SYNC_CRITICAL_START:
 		if (!sm->lock_acquire(this->processor_id))
 			return false;
 		this->sync_locks++;
+#if SYNC_DEBUG
+		ORCS_PRINTF("SYNC %lu %lu LOCK_ACQUIRE\n", orcs_engine.get_global_cycle(), this->processor_id)
+#endif
 		break;
 	case SYNC_CRITICAL_END:
 		sm->lock_release(this->processor_id);
+#if SYNC_DEBUG
+		ORCS_PRINTF("SYNC %lu %lu LOCK_RELEASE\n", orcs_engine.get_global_cycle(), this->processor_id)
+#endif
 		break;
 	default: /// SYNC_NONE, or markers with no effect (WAIT_CRITICAL_START, FREE)
 		break;
@@ -1170,6 +1183,9 @@ void processor_t::fetch()
 				this->traceIsOver = true;
 				/// No more barriers from this core: do not let others wait for it
 				orcs_engine.sync_manager->retire(this->processor_id);
+#if SYNC_DEBUG
+				ORCS_PRINTF("SYNC %lu %lu RETIRE\n", orcs_engine.get_global_cycle(), this->processor_id)
+#endif
 				break;
 			}
 
@@ -3599,6 +3615,13 @@ uint32_t processor_t::mob_read()
 
 		if (orcs_engine.cacheManager->searchData(request))
 		{
+#if SYNC_DEBUG
+			if (this->log_next_load)
+			{
+				ORCS_PRINTF("SYNC %lu %lu FIRST_LOAD\n", orcs_engine.get_global_cycle(), this->processor_id)
+				this->log_next_load = false;
+			}
+#endif
 			this->oldest_read_to_send->cycle_send_request = orcs_engine.get_global_cycle(); //Cycle which sent request to memory system
 			this->oldest_read_to_send->sent = true;
 			this->oldest_read_to_send->rob_ptr->sent = true; ///Setting flag which marks sent request. set to remove entry on mob at commit
@@ -4033,6 +4056,9 @@ void processor_t::commit()
 #endif
 
 				this->add_stat_inst_store_completed();
+#if SYNC_DEBUG
+				this->last_store_commit = orcs_engine.get_global_cycle();
+#endif
 				break;
 
 			// BRANCHES

@@ -26,6 +26,8 @@
 #define DISPATCH_DEBUG 0
 #define EXECUTE_DEBUG 0
 #define COMMIT_DEBUG 0
+/// Log "SYNC <cycle> <core> <event> ..." lines for barriers and critical sections
+#define SYNC_DEBUG 0
 #define MEMORY_DEBUG 0
 #define CM_DEBUG 0
 #define HIVE_DEBUG 0
