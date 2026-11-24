@@ -574,54 +574,147 @@ VOID ImageLoad(IMG img, VOID *) {
     initialize_intrinsics(hmc_x86_data, vim_x86_data, mps_x86_data);
 
     TRACE_GENERATOR_DEBUG_PRINTF("ImageLoad()\n");
-    /// Only the thread master runs these calls
+    // GOMP entry points of libgomp (checked against GCC 13). A call that
+    // matches no list is written as "#Found different GOMP call" in the trace.
+
+    /// Start a parallel region: only the master thread calls these, and the
+    /// marker is copied to every thread's trace
     std::vector<const char*> OMP_barrier_master_start;
         OMP_barrier_master_start.push_back("GOMP_parallel_start");
         OMP_barrier_master_start.push_back("GOMP_parallel");
-        OMP_barrier_master_start.push_back("GOMP_parallel_loop_dynamic_start");
+        OMP_barrier_master_start.push_back("GOMP_parallel_reductions");
         OMP_barrier_master_start.push_back("GOMP_parallel_loop_static_start");
+        OMP_barrier_master_start.push_back("GOMP_parallel_loop_dynamic_start");
+        OMP_barrier_master_start.push_back("GOMP_parallel_loop_guided_start");
+        OMP_barrier_master_start.push_back("GOMP_parallel_loop_runtime_start");
+        OMP_barrier_master_start.push_back("GOMP_parallel_loop_static");
+        OMP_barrier_master_start.push_back("GOMP_parallel_loop_dynamic");
+        OMP_barrier_master_start.push_back("GOMP_parallel_loop_guided");
+        OMP_barrier_master_start.push_back("GOMP_parallel_loop_runtime");
+        OMP_barrier_master_start.push_back("GOMP_parallel_loop_nonmonotonic_dynamic");
+        OMP_barrier_master_start.push_back("GOMP_parallel_loop_nonmonotonic_guided");
+        OMP_barrier_master_start.push_back("GOMP_parallel_loop_nonmonotonic_runtime");
+        OMP_barrier_master_start.push_back("GOMP_parallel_loop_maybe_nonmonotonic_runtime");
+        OMP_barrier_master_start.push_back("GOMP_parallel_sections_start");
+        OMP_barrier_master_start.push_back("GOMP_parallel_sections");
 
+    /// End of a parallel region. Called explicitly after GOMP_parallel_start
+    /// (GCC < 4.9) and internally by most combined GOMP_parallel_* calls;
+    /// with static linking GOMP_parallel itself may inline it (no marker).
     std::vector<const char*> OMP_barrier_master_end;
         OMP_barrier_master_end.push_back("GOMP_parallel_end");
 
-    /// All the threads runs these calls
+    /// Barriers: every thread of the team calls these
     std::vector<const char*> OMP_barrier_simple;
-        OMP_barrier_simple.push_back(("GOMP_barrier"));
-        OMP_barrier_simple.push_back(("GOMP_loop_dynamic_start"));
-        OMP_barrier_simple.push_back(("GOMP_loop_ordered_static_start"));
-        OMP_barrier_simple.push_back(("GOMP_loop_guided_start"));
-        OMP_barrier_simple.push_back(("GOMP_loop_end"));
-        OMP_barrier_simple.push_back(("GOMP_parallel_sections_start"));
-        OMP_barrier_simple.push_back(("GOMP_sections_end"));
+        OMP_barrier_simple.push_back("GOMP_barrier");
+        OMP_barrier_simple.push_back("GOMP_barrier_cancel");
+        OMP_barrier_simple.push_back("GOMP_loop_end");
+        OMP_barrier_simple.push_back("GOMP_loop_end_cancel");
+        OMP_barrier_simple.push_back("GOMP_sections_end");
+        OMP_barrier_simple.push_back("GOMP_sections_end_cancel");
 
     /// Enters in a critical section
     std::vector<const char*> OMP_critical_start;
-        OMP_critical_start.push_back(("GOMP_atomic_start"));
-        OMP_critical_start.push_back(("GOMP_critical_start"));
-        OMP_critical_start.push_back(("GOMP_critical_name_start"));
+        OMP_critical_start.push_back("GOMP_atomic_start");
+        OMP_critical_start.push_back("GOMP_critical_start");
+        OMP_critical_start.push_back("GOMP_critical_name_start");
 
     /// Exits in a critical section
     std::vector<const char*> OMP_critical_end;
-        OMP_critical_end.push_back(("GOMP_atomic_end"));
-        OMP_critical_end.push_back(("GOMP_critical_end"));
-        OMP_critical_end.push_back(("GOMP_critical_name_end"));
+        OMP_critical_end.push_back("GOMP_atomic_end");
+        OMP_critical_end.push_back("GOMP_critical_end");
+        OMP_critical_end.push_back("GOMP_critical_name_end");
 
 
     /// No Sync or very fast sync that will be ignored
     std::vector<const char*> OMP_ignore;
         /// No Wait
-        OMP_ignore.push_back(("GOMP_loop_end_nowait"));
-        OMP_ignore.push_back(("GOMP_sections_end_nowait"));
+        OMP_ignore.push_back("GOMP_loop_end_nowait");
+        OMP_ignore.push_back("GOMP_sections_end_nowait");
         /// Check if it is running alone
-        OMP_ignore.push_back(("GOMP_single_start"));
-        /// Reduction
-        OMP_ignore.push_back(("GOMP_ordered_start"));
-        OMP_ignore.push_back(("GOMP_ordered_end"));
-        /// Lock to get the next chunck of iterations
-        OMP_ignore.push_back(("GOMP_loop_dynamic_next"));
-        OMP_ignore.push_back(("GOMP_loop_ordered_static_next"));
-        OMP_ignore.push_back(("GOMP_loop_guided_next"));
-        OMP_ignore.push_back(("GOMP_sections_next"));
+        OMP_ignore.push_back("GOMP_single_start");
+        OMP_ignore.push_back("GOMP_single_copy_start");
+        OMP_ignore.push_back("GOMP_single_copy_end");
+        OMP_ignore.push_back("GOMP_scope_start");
+        /// Ordered sequence inside a loop
+        OMP_ignore.push_back("GOMP_ordered_start");
+        OMP_ignore.push_back("GOMP_ordered_end");
+        /// Worksharing start (no barrier) and lock to get the next chunk of
+        /// iterations or sections
+        OMP_ignore.push_back("GOMP_loop_start");
+        OMP_ignore.push_back("GOMP_loop_ordered_start");
+        OMP_ignore.push_back("GOMP_loop_static_start");
+        OMP_ignore.push_back("GOMP_loop_static_next");
+        OMP_ignore.push_back("GOMP_loop_dynamic_start");
+        OMP_ignore.push_back("GOMP_loop_dynamic_next");
+        OMP_ignore.push_back("GOMP_loop_guided_start");
+        OMP_ignore.push_back("GOMP_loop_guided_next");
+        OMP_ignore.push_back("GOMP_loop_runtime_start");
+        OMP_ignore.push_back("GOMP_loop_runtime_next");
+        OMP_ignore.push_back("GOMP_loop_nonmonotonic_dynamic_start");
+        OMP_ignore.push_back("GOMP_loop_nonmonotonic_dynamic_next");
+        OMP_ignore.push_back("GOMP_loop_nonmonotonic_guided_start");
+        OMP_ignore.push_back("GOMP_loop_nonmonotonic_guided_next");
+        OMP_ignore.push_back("GOMP_loop_nonmonotonic_runtime_start");
+        OMP_ignore.push_back("GOMP_loop_nonmonotonic_runtime_next");
+        OMP_ignore.push_back("GOMP_loop_maybe_nonmonotonic_runtime_start");
+        OMP_ignore.push_back("GOMP_loop_maybe_nonmonotonic_runtime_next");
+        OMP_ignore.push_back("GOMP_loop_ordered_static_start");
+        OMP_ignore.push_back("GOMP_loop_ordered_static_next");
+        OMP_ignore.push_back("GOMP_loop_ordered_dynamic_start");
+        OMP_ignore.push_back("GOMP_loop_ordered_dynamic_next");
+        OMP_ignore.push_back("GOMP_loop_ordered_guided_start");
+        OMP_ignore.push_back("GOMP_loop_ordered_guided_next");
+        OMP_ignore.push_back("GOMP_loop_ordered_runtime_start");
+        OMP_ignore.push_back("GOMP_loop_ordered_runtime_next");
+        OMP_ignore.push_back("GOMP_loop_ull_start");
+        OMP_ignore.push_back("GOMP_loop_ull_ordered_start");
+        OMP_ignore.push_back("GOMP_loop_ull_static_start");
+        OMP_ignore.push_back("GOMP_loop_ull_static_next");
+        OMP_ignore.push_back("GOMP_loop_ull_dynamic_start");
+        OMP_ignore.push_back("GOMP_loop_ull_dynamic_next");
+        OMP_ignore.push_back("GOMP_loop_ull_guided_start");
+        OMP_ignore.push_back("GOMP_loop_ull_guided_next");
+        OMP_ignore.push_back("GOMP_loop_ull_runtime_start");
+        OMP_ignore.push_back("GOMP_loop_ull_runtime_next");
+        OMP_ignore.push_back("GOMP_loop_ull_nonmonotonic_dynamic_start");
+        OMP_ignore.push_back("GOMP_loop_ull_nonmonotonic_dynamic_next");
+        OMP_ignore.push_back("GOMP_loop_ull_nonmonotonic_guided_start");
+        OMP_ignore.push_back("GOMP_loop_ull_nonmonotonic_guided_next");
+        OMP_ignore.push_back("GOMP_loop_ull_nonmonotonic_runtime_start");
+        OMP_ignore.push_back("GOMP_loop_ull_nonmonotonic_runtime_next");
+        OMP_ignore.push_back("GOMP_loop_ull_maybe_nonmonotonic_runtime_start");
+        OMP_ignore.push_back("GOMP_loop_ull_maybe_nonmonotonic_runtime_next");
+        OMP_ignore.push_back("GOMP_loop_ull_ordered_static_start");
+        OMP_ignore.push_back("GOMP_loop_ull_ordered_static_next");
+        OMP_ignore.push_back("GOMP_loop_ull_ordered_dynamic_start");
+        OMP_ignore.push_back("GOMP_loop_ull_ordered_dynamic_next");
+        OMP_ignore.push_back("GOMP_loop_ull_ordered_guided_start");
+        OMP_ignore.push_back("GOMP_loop_ull_ordered_guided_next");
+        OMP_ignore.push_back("GOMP_loop_ull_ordered_runtime_start");
+        OMP_ignore.push_back("GOMP_loop_ull_ordered_runtime_next");
+        OMP_ignore.push_back("GOMP_sections_start");
+        OMP_ignore.push_back("GOMP_sections2_start");
+        OMP_ignore.push_back("GOMP_sections_next");
+        /// Tasks wait only for tasks, not for the other threads
+        OMP_ignore.push_back("GOMP_task");
+        OMP_ignore.push_back("GOMP_taskwait");
+        OMP_ignore.push_back("GOMP_taskwait_depend");
+        OMP_ignore.push_back("GOMP_taskwait_depend_nowait");
+        OMP_ignore.push_back("GOMP_taskyield");
+        OMP_ignore.push_back("GOMP_taskgroup_start");
+        OMP_ignore.push_back("GOMP_taskgroup_end");
+        OMP_ignore.push_back("GOMP_taskgroup_reduction_register");
+        OMP_ignore.push_back("GOMP_taskgroup_reduction_unregister");
+        OMP_ignore.push_back("GOMP_task_reduction_remap");
+        OMP_ignore.push_back("GOMP_workshare_task_reduction_unregister");
+        OMP_ignore.push_back("GOMP_taskloop");
+        OMP_ignore.push_back("GOMP_taskloop_ull");
+        /// Cancellation and runtime messages
+        OMP_ignore.push_back("GOMP_cancel");
+        OMP_ignore.push_back("GOMP_cancellation_point");
+        OMP_ignore.push_back("GOMP_error");
+        OMP_ignore.push_back("GOMP_warning");
         /// "loop_next" should be implemented with
         /// instrument BEFORE and AFTER
         /// Pin’s implementation of RTN_InsertCall() with IPOINT_AFTER
@@ -951,7 +1044,16 @@ VOID ImageLoad(IMG img, VOID *) {
                     }
                 }
 
-                if (!found_GOMP) {
+                /// OMP_barrier_master_end is matched below, not unknown
+                bool is_master_end = false;
+                for (uint32_t i = 0; i < OMP_barrier_master_end.size(); i++) {
+                    if (strcmp(rtn_name.c_str(), OMP_barrier_master_end[i]) == 0) {
+                        is_master_end = true;
+                        break;
+                    }
+                }
+
+                if (!found_GOMP && !is_master_end) {
                     /// If a different OpenMP call is found on the binary
                     RTN_Open(rtn);
 
