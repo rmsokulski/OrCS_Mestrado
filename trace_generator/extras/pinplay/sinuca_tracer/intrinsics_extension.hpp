@@ -219,6 +219,8 @@ VOID hmc_write_memory_1param(ADDRINT read, UINT32 size, UINT32 bbl, THREADID thr
 VOID vima_write_memory_broadcast(ADDRINT write, UINT32 size, UINT32 bbl, THREADID threadid);
 VOID hmc_write_memory_2param(ADDRINT read, ADDRINT write, UINT32 size, UINT32 bbl, THREADID threadid);
 VOID hmc_write_memory_3param(ADDRINT read1, ADDRINT read2, ADDRINT write, UINT32 size, UINT32 bbl, THREADID threadid);
+VOID vima_write_memory_gather(ADDRINT base, ADDRINT ids, ADDRINT write, UINT32 size, UINT32 elem_size, UINT32 bbl, THREADID threadid);
+INT icheck_gather(std::string rtn_name);
 VOID arch_x86_set_data_instr(data_instr *hmc_x86_data, char const *rtn_name, char const *hmc_instr_name, char const *x86_instr_name, UINT32 instr_len);
 VOID arch_x86_trace_instruction(RTN hmc_x86_rtn, data_instr *hmc_x86_data);
 VOID synthetic_trace_generation(std::string rtn_name, data_instr hmc_x86_data[20], data_instr vim_x86_data[114], data_instr mps_x86_data[28], RTN rtn);

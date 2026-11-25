@@ -27,6 +27,8 @@
 ///###########################################################################
 #include "intrinsics_extension.hpp"
 #include <string>
+#include <vector>
+#include <algorithm>
 
 //============================================================================
 // Intrinsics Functions
@@ -127,6 +129,55 @@ VOID hmc_write_memory_3param(ADDRINT read1, ADDRINT read2, ADDRINT write,
     snprintf(mem_str, TRACE_LINE_SIZE,
             "%c %d %" PRIu64 " %d\n", 'W', size, (uint64_t)write, bbl);
     gzwrite(thread_data[threadid].gzMemoryTraceFile, mem_str, strlen(mem_str));
+}
+
+/// VIMA gather (dst[i] = base[ids[i]], 32-bit indices): the usual R base /
+/// R ids / W dst lines, then the lines the gather really reads, so OrCS can
+/// fetch them instead of 8 KB from the base:
+///     G <count>
+///     <line address>      (distinct VIMA_GATHER_LINE_SIZE-byte lines, sorted)
+#define VIMA_GATHER_LINE_SIZE 64
+VOID vima_write_memory_gather(ADDRINT base, ADDRINT ids, ADDRINT write,
+                                UINT32 size, UINT32 elem_size, UINT32 bbl,
+                                THREADID threadid) {
+    if (thread_data[threadid].is_instrumented_bbl == false)
+        return;     // If the pin-points disabled this region
+
+    hmc_write_memory_3param(base, ids, write, size, bbl, threadid);
+
+    UINT32 count = size / elem_size;
+    if (count == 0) return;
+    std::vector<UINT32> index(count);
+    size_t copied = PIN_SafeCopy(&index[0], (VOID *)ids, count * sizeof(UINT32));
+    count = copied / sizeof(UINT32);    /// Unreadable indices: keep the ones read
+
+    std::vector<uint64_t> lines(count);
+    for (UINT32 i = 0; i < count; i++) {
+        uint64_t element = (uint64_t)base + (uint64_t)index[i] * elem_size;
+        lines[i] = element & ~((uint64_t)VIMA_GATHER_LINE_SIZE - 1);
+    }
+    std::sort(lines.begin(), lines.end());
+    lines.erase(std::unique(lines.begin(), lines.end()), lines.end());
+
+    char mem_str[TRACE_LINE_SIZE];
+    std::string block;
+    snprintf(mem_str, TRACE_LINE_SIZE, "G %u\n", (UINT32)lines.size());
+    block += mem_str;
+    for (size_t i = 0; i < lines.size(); i++) {
+        snprintf(mem_str, TRACE_LINE_SIZE, "%" PRIu64 "\n", lines[i]);
+        block += mem_str;
+    }
+    gzwrite(thread_data[threadid].gzMemoryTraceFile, block.c_str(), block.size());
+}
+
+/// Gathers: igtru, igtrs, fgtrs (4-byte elements), dgtrs (8-byte elements)
+INT icheck_gather(std::string rtn_name) {
+    for (int i = 0; i < VIMA_GATHER_COUNT; i++) {
+        if (rtn_name.compare(4, vima_gather_names[i].size(),
+                             vima_gather_names[i].c_str()) == 0)
+            return 1;
+    }
+    return 0;
 }
 
 // ===========================================================================
@@ -331,6 +382,19 @@ VOID arch_x86_trace_instruction(RTN arch_rtn, data_instr archx_x86_data) {
                             IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
                             IARG_UINT32, archx_x86_data.instr_len,
                             IARG_UINT32, count_trace, IARG_THREAD_ID, IARG_END);
+        } else if (icheck_gather(rtn_name) == 1) {
+            /// _Z12_vim2K_fgtrs...: element type at position 11 (i, f or d)
+            UINT32 elem_size = (rtn_name[11] == 'd') ? 8 : 4;
+            RTN_InsertCall(arch_rtn, IPOINT_BEFORE,
+                            (AFUNPTR)vima_write_memory_gather,
+                            IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+                            IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
+                            IARG_FUNCARG_ENTRYPOINT_VALUE, 2,
+                            IARG_UINT32, archx_x86_data.instr_len,
+                            IARG_UINT32, elem_size,
+                            IARG_UINT32, count_trace,
+                            IARG_THREAD_ID,
+                            IARG_END);
         } else if (icheck_1parameter(rtn_name) == 1) {
             RTN_InsertCall(arch_rtn, IPOINT_BEFORE, (AFUNPTR)hmc_write_memory_1param, 
                             IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
