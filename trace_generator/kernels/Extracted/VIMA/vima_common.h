@@ -33,6 +33,11 @@ void vima_fslts(const float *a, const float *b, float *dst)     __asm__("_Z12_vi
 void vima_fcums(const float *src, float *dst)                   __asm__("_Z12_vim2K_fcumsPKfPf");
 void vima_fgtrs(const float *base, const uint32_t *ids, float *dst) __asm__("_Z12_vim2K_fgtrsPKfPKjPf");
 
+/// VIMA fence: the CPU waits until every earlier VIMA instruction has completed.
+/// Call it before the CPU reads a vector a VIMA instruction wrote. The tracer
+/// writes a $SYNC_VIMA_FENCE marker for it, and OrCS drains the core there.
+void vima_fence(void) __asm__("_vim_fence");
+
 // -----------------------------------------------------------------------------------------
 // Scratch vectors, 8 KB aligned
 // -----------------------------------------------------------------------------------------
@@ -81,9 +86,10 @@ static inline void vima_range(VimaScratch *s, const float *values, float *passes
     vima_fsubs(s->ones, s->outside, passes);
 }
 
-/// Sum of a vector, read back by the CPU (1 VIMA instruction + 1 load)
+/// Sum of a vector, read back by the CPU (1 VIMA instruction + fence + 1 load)
 static inline float vima_sum(VimaScratch *s, const float *vector) {
     vima_fcums(vector, s->result);
+    vima_fence();
     return s->result[0];
 }
 

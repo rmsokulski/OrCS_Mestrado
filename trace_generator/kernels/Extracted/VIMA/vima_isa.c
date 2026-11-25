@@ -12,6 +12,8 @@ VIMA_OP void vima_fmuls(const float *a, const float *b, float *dst) { for (size_
 VIMA_OP void vima_fslts(const float *a, const float *b, float *dst) { for (size_t i = 0; i < VIMA_LANES; i++) dst[i] = a[i] < b[i] ? 1.0f : 0.0f; }
 VIMA_OP void vima_fgtrs(const float *base, const uint32_t *ids, float *dst) { for (size_t i = 0; i < VIMA_LANES; i++) dst[i] = base[ids[i]]; }
 
+VIMA_OP void vima_fence(void) { __asm__ volatile ("" ::: "memory"); }
+
 VIMA_OP void vima_fcums(const float *src, float *dst) {
     float sum = 0.0f;
     for (size_t i = 0; i < VIMA_LANES; i++) sum += src[i];

@@ -45,6 +45,7 @@ double scan_selvec_skip_vima(float **columns, size_t column_count,
             vima_set_bounds(&scratch, predicate);
             for (; row + VIMA_LANES <= end_row; row += VIMA_LANES) {
                 vima_range(&scratch, column + row, scratch.passes);
+                vima_fence();   /// The CPU reads the VIMA result next
                 for (size_t lane = 0; lane < VIMA_LANES; lane++) {   /// CPU compaction
                     sv_maybe_push_back(&selected, (uint32_t)(row + lane), scratch.passes[lane] != 0.0f);
                 }
@@ -68,6 +69,7 @@ double scan_selvec_skip_vima(float **columns, size_t column_count,
             for (; read_position + VIMA_LANES <= selected.size; read_position += VIMA_LANES) {
                 vima_fgtrs(column, selected.data + read_position, scratch.values);
                 vima_range(&scratch, scratch.values, scratch.passes);
+                vima_fence();   /// The CPU reads the VIMA result next
                 for (size_t lane = 0; lane < VIMA_LANES; lane++) {   /// CPU compaction
                     selected.data[write_position] = selected.data[read_position + lane];
                     write_position += scratch.passes[lane] != 0.0f;
