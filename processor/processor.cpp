@@ -2998,10 +2998,12 @@ void processor_t::rename()
 						rob_line->uop.uop_number);
 #endif
 
-			if (DISAMBIGUATION_ENABLED)
-			{
-				this->disambiguator->make_memory_dependences(&rob_line->mob_base[rob_line->pos_mob]);
-			}
+			/// No memory disambiguation for VIMA: it checks one address
+			/// (memory_address, never set for VIMA, so always 0) against single
+			/// loads and stores, while a VIMA instruction touches three 8 KB
+			/// vectors. It only created spurious dependencies on whatever load
+			/// or store hashed with address 0. Order among VIMA instructions
+			/// comes from sending them in program order (get_next_op_vima).
 		}
 
 #if PROCESSOR_DEBUG
