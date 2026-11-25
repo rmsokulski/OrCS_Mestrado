@@ -138,6 +138,10 @@ endif
 	mv $@  $(PINPLAY_HOME)/bin/$(TARGET)/
 	@echo ""
 
+# sinuca_tracer.cpp #includes these sources: rebuild it when they change
+${OBJDIR}/sinuca_tracer.${OBJEXT}: intrinsics_extension.cpp intrinsics_extension.hpp conversions.cpp opcodes.hpp \
+	vima_defines.h hmc_defines.h mps_defines.h tracer_log_procedures.hpp ../../../../utils/enumerations.hpp
+
 ${OBJDIR}/sinuca_tracer.so:  ${OBJDIR}/sinuca_tracer.${OBJEXT} $(PINPLAY_LIB_HOME)/libpinplay.a $(EXT_LIB_HOME)/libbz2.a $(EXT_LIB_HOME)/libzlib.a $(CONTROLLERLIB)
 	$(LINKER) $(TOOL_LDFLAGS) $(LINK_EXE)$@ $^ $(TOOL_LPATHS) $(TOOL_LIBS) $(MYLIBS) $(EXTRA_LIBS) $(PIN_LIBS) $(DBG)
 	@echo ""
