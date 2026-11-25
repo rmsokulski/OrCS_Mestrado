@@ -281,7 +281,9 @@ void vima_controller_t::clock(){
                 this->instruction_ready (index);
                 break;
             case PACKAGE_STATE_TRANSMIT:
-                if (index == vima_buffer_start) this->check_completion (vima_buffer_start);
+                /// readyAt = entry + the instruction's VIMA cache lookup latency
+                if (index == vima_buffer_start && vima_buffer[index]->readyAt <= orcs_engine.get_global_cycle())
+                    this->check_completion (vima_buffer_start);
                 break;
             case PACKAGE_STATE_VIMA: {
                 if (older_waiting || !this->can_enter (index)) {
