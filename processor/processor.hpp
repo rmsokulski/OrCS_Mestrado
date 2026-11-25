@@ -61,6 +61,7 @@ class processor_t {
 	uint64_t stall_sync_drain;  ///< ... of which draining the pipeline
 	uint64_t sync_barriers;     ///< barriers passed
 	uint64_t sync_locks;        ///< critical sections entered
+	uint64_t sync_vima_fences;  ///< VIMA fences passed
 	bool sync_ready();
 	bool pipeline_empty();
 #if SYNC_DEBUG

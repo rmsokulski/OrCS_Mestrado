@@ -410,7 +410,7 @@ bool trace_reader_t::trace_next_dynamic(uint32_t *next_bbl, sync_type_t *sync) {
             DEBUG_PRINTF("Dynamic trace line (synchronization): %s\n", file_line);
             char *end;
             uint32_t code = strtoul(file_line + 1, &end, 10);
-            ERROR_ASSERT_PRINTF(end != file_line + 1 && code <= SYNC_FREE, "Invalid synchronization line %s\n", file_line);
+            ERROR_ASSERT_PRINTF(end != file_line + 1 && code <= SYNC_VIMA_FENCE, "Invalid synchronization line %s\n", file_line);
             *sync = (sync_type_t)code;
             valid_dynamic = true;
         }

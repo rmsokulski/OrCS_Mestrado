@@ -222,7 +222,8 @@ enum sync_type_t {
     SYNC_WAIT_CRITICAL_START = 1,
     SYNC_CRITICAL_START = 2,
     SYNC_CRITICAL_END = 3,
-    SYNC_FREE = 4
+    SYNC_FREE = 4,
+    SYNC_VIMA_FENCE = 5     ///< _vim_fence(): wait until every older instruction (VIMA included) has committed
 };
 
 #endif

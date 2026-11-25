@@ -885,6 +885,24 @@ VOID ImageLoad(IMG img, VOID *) {
                 }
             }
 
+            /// VIMA fence: the calling thread writes $SYNC_VIMA_FENCE, and OrCS
+            /// drains that core (every older instruction, VIMA included,
+            /// commits) before going on. The program calls it before the CPU
+            /// reads data a VIMA instruction wrote.
+            if (rtn_name == "_vim_fence" || rtn_name == "_Z10_vim_fencev") {
+                std::stringstream fence_str;
+                fence_str << "#_vim_fence\n$" << SYNC_VIMA_FENCE << "\n";
+                RTN_Open(rtn);
+                RTN_InsertCall(rtn, IPOINT_BEFORE,
+                                AFUNPTR(DynamicOMP_char),
+                                IARG_PTR, strdup(fence_str.str().c_str()),
+                                IARG_THREAD_ID,
+                                IARG_BOOL, false,
+                                IARG_END);
+                RTN_Close(rtn);
+                continue;
+            }
+
             /// End of a parallel region. Every thread of the team calls
             /// gomp_team_barrier_wait_final (the implicit barrier) after its
             /// part of the region: each one writes $0 to its own trace.

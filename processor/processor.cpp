@@ -11,6 +11,7 @@ processor_t::processor_t()
 	this->stall_sync_drain = 0;
 	this->sync_barriers = 0;
 	this->sync_locks = 0;
+	this->sync_vima_fences = 0;
 	this->stall_wrong_branch = 0;
 	//=============
 	//Statistics Decode
@@ -1065,7 +1066,8 @@ bool processor_t::sync_ready()
 	/// Drain before arriving, acquiring or releasing
 	bool acts = (this->pending_sync == SYNC_BARRIER && !this->sync_arrived) ||
 				this->pending_sync == SYNC_CRITICAL_START ||
-				this->pending_sync == SYNC_CRITICAL_END;
+				this->pending_sync == SYNC_CRITICAL_END ||
+				this->pending_sync == SYNC_VIMA_FENCE;
 	if (acts && !this->pipeline_empty())
 	{
 		this->stall_sync_drain++;
@@ -1105,6 +1107,12 @@ bool processor_t::sync_ready()
 #if SYNC_DEBUG
 		ORCS_PRINTF("SYNC %lu %lu LOCK_RELEASE\n", orcs_engine.get_global_cycle(), this->processor_id)
 #endif
+		break;
+	case SYNC_VIMA_FENCE:
+		/// The drain above did the work: a VIMA instruction commits only after
+		/// VIMA completes it, so younger instructions (e.g. a load of a VIMA
+		/// result) start only after every older VIMA instruction finished
+		this->sync_vima_fences++;
 		break;
 	default: /// SYNC_NONE, or markers with no effect (WAIT_CRITICAL_START, FREE)
 		break;
@@ -4265,6 +4273,7 @@ void processor_t::statistics(FILE *output)
 		fprintf(output, "Stalls Sync Drain:          %lu\n", this->stall_sync_drain);
 		fprintf(output, "Sync Barriers:          %lu\n", this->sync_barriers);
 		fprintf(output, "Sync Critical Sections:          %lu\n", this->sync_locks);
+		fprintf(output, "Sync VIMA Fences:          %lu\n", this->sync_vima_fences);
 		fprintf(output, "Stalls Decode:          %lu\n", this->get_stall_full_DecodeBuffer());
 		fprintf(output, "Stalls Rename:          %lu\n", this->get_stall_full_ROB());
 		fprintf(output, "Stalls Full MOB Read:          %lu\n", this->get_stall_full_MOB_Read());
