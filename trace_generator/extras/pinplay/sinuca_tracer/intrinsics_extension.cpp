@@ -77,6 +77,18 @@ VOID hmc_write_memory_1param(ADDRINT read, UINT32 size, UINT32 bbl,
     gzwrite(thread_data[threadid].gzMemoryTraceFile, mem_str, strlen(mem_str));
 }
 
+/// Broadcast (mov: dst[i] = value): the destination is only written, never read
+VOID vima_write_memory_broadcast(ADDRINT write, UINT32 size, UINT32 bbl,
+                                THREADID threadid) {
+    if (thread_data[threadid].is_instrumented_bbl == false)
+        return;     // If the pin-points disabled this region
+
+    char mem_str[TRACE_LINE_SIZE];
+    snprintf(mem_str, TRACE_LINE_SIZE,
+            "%c %d %" PRIu64 " %d\n", 'W', size, (uint64_t)write, bbl);
+    gzwrite(thread_data[threadid].gzMemoryTraceFile, mem_str, strlen(mem_str));
+}
+
 VOID hmc_write_memory_2param(ADDRINT read, ADDRINT write, UINT32 size,
                                 UINT32 bbl, THREADID threadid) {
     TRACE_GENERATOR_DEBUG_PRINTF("hmc_write_memory()\n");
@@ -274,6 +286,19 @@ INT icheck_1parameter(std::string rtn_name) {
     return 0;
 }
 
+/// VIMA broadcasts (imovs, imovu, fmovs, dmovs): one value argument, one
+/// destination vector that is only written. The other 1-parameter
+/// instructions (idpts, idptu) keep the read + write recording.
+INT icheck_broadcast(std::string rtn_name) {
+    static const char *broadcast_ops[] = { "movs", "movu" };
+    if (icheck_1parameter(rtn_name) != 1) return 0;
+    for (uint32_t i = 0; i < sizeof(broadcast_ops) / sizeof(broadcast_ops[0]); i++) {
+        /// _Z12_vim2K_fmovs...: the operation is the 4 characters after "_vimNN_x"
+        if (rtn_name.compare(12, 4, broadcast_ops[i]) == 0) return 1;
+    }
+    return 0;
+}
+
 VOID arch_x86_trace_instruction(RTN arch_rtn, data_instr archx_x86_data) {
     opcode_package_t NewInstruction;
     char bbl_count_str[TRACE_LINE_SIZE];
@@ -301,7 +326,12 @@ VOID arch_x86_trace_instruction(RTN arch_rtn, data_instr archx_x86_data) {
                         IARG_THREAD_ID,
                         IARG_END);
 
-        if (icheck_1parameter(rtn_name) == 1) {
+        if (icheck_broadcast(rtn_name) == 1) {
+            RTN_InsertCall(arch_rtn, IPOINT_BEFORE, (AFUNPTR)vima_write_memory_broadcast,
+                            IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
+                            IARG_UINT32, archx_x86_data.instr_len,
+                            IARG_UINT32, count_trace, IARG_THREAD_ID, IARG_END);
+        } else if (icheck_1parameter(rtn_name) == 1) {
             RTN_InsertCall(arch_rtn, IPOINT_BEFORE, (AFUNPTR)hmc_write_memory_1param, 
                             IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
                             IARG_UINT32, archx_x86_data.instr_len, 
@@ -488,7 +518,10 @@ VOID arch_x86_trace_instruction(RTN arch_rtn, data_instr archx_x86_data) {
             }
         }
 
-        if (icheck_2parameters(rtn_name) == 1
+        if (icheck_broadcast(rtn_name) == 1) {
+            NewInstruction.num_reads = 0;   /// Broadcast: destination only written
+            NewInstruction.num_writes = 1;
+        } else if (icheck_2parameters(rtn_name) == 1
         || icheck_1parameter(rtn_name)) {
             NewInstruction.num_reads = 1;
             NewInstruction.num_writes = 1;
