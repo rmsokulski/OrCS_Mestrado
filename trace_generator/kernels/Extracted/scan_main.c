@@ -11,6 +11,7 @@
 #include <string.h>
 #include <time.h>
 #include "Scalar/scan_common.h"
+#include "orcs_tracing_c.h"
 
 // -----------------------------------------------------------------------------------------
 // Prototypes of every version (all share the scan_fn signature)
@@ -178,8 +179,10 @@ int main(int argc, char **argv)
     size_t qualifying_count = 0;
 
     clock_gettime(CLOCK_MONOTONIC, &start);
+    ORCS_tracing_start();   // traced region: only the scan (serial code, around any parallel region)
     double sum = version->function(columns, column_count, predicates, predicate_count,
                                    partitions, skip, partition_count, &qualifying_count);
+    ORCS_tracing_stop();
     clock_gettime(CLOCK_MONOTONIC, &end);
     double seconds = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
 
