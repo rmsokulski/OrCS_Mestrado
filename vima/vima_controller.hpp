@@ -67,6 +67,8 @@ class vima_controller_t {
         void print_vima_instructions();
         vima_vector_t* search_cache (uint64_t address, cache_status_t* result);
         void check_completion (int index);
+        bool can_enter (int index);
+        vima_vector_t* acquire_line (uint64_t address, cache_status_t* result);
         
         // Get channel to access DATA
         inline uint64_t get_index(uint64_t addr) {

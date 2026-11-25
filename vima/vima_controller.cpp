@@ -132,7 +132,7 @@ vima_vector_t* vima_controller_t::search_cache (uint64_t address, cache_status_t
                 #endif
                 ret = &cache[i][0];
                 break;
-            } else if (cache[i][0].lru < lru_cycle && !cache[i][0].taken) {
+            } else if (cache[i][0].lru < lru_cycle && cache[i][0].users == 0) {
                 lru_cycle = cache[i][0].lru;
                 lru_way = i;
             }
@@ -148,7 +148,7 @@ vima_vector_t* vima_controller_t::search_cache (uint64_t address, cache_status_t
 		        ret = &cache[index][i];
                 break;
             }
-            else if (cache[index][i].lru < lru_cycle && !cache[i][i].taken) {
+            else if (cache[index][i].lru < lru_cycle && cache[index][i].users == 0) {
                 lru_cycle = cache[index][i].lru;
                 lru_way = i;
             }
@@ -177,58 +177,79 @@ vima_vector_t* vima_controller_t::search_cache (uint64_t address, cache_status_t
     return ret;
 }
 
+/// Releases a line held by a finished instruction (sources and destination)
+static inline void release_line (vima_vector_t* line){
+    if (line == NULL) return;
+    ERROR_ASSERT_PRINTF (line->users > 0, "VIMA cache line released more times than it was taken")
+    line->users--;
+    line->set_lru (orcs_engine.get_global_cycle());
+}
+
 void vima_controller_t::check_completion (int index){
-    uint32_t write_lookup_latency = 0;   /// Destination lookup made here, not when the instruction entered
-    if (vima_buffer[index]->vima_read1_vec != NULL){
-        if (vima_buffer[index]->vima_read1_vec->status != PACKAGE_STATE_READY) return;
-        else {
-            vima_buffer[index]->vima_read1_vec->set_lru (orcs_engine.get_global_cycle());
-            vima_buffer[index]->vima_read1_vec->taken = false;
-        }
-        if (VIMA_UNBALANCED && read1_unbalanced != NULL){
-            if (read1_unbalanced->status != PACKAGE_STATE_READY) return;
-        }
+    memory_package_t* instruction = vima_buffer[index];
+
+    /// Every source must be in the VIMA cache before the instruction completes
+    if (instruction->vima_read1_vec != NULL){
+        if (instruction->vima_read1_vec->status != PACKAGE_STATE_READY) return;
+        if (VIMA_UNBALANCED && read1_unbalanced != NULL && read1_unbalanced->status != PACKAGE_STATE_READY) return;
+    }
+    if (instruction->vima_read2_vec != NULL){
+        if (instruction->vima_read2_vec->status != PACKAGE_STATE_READY) return;
+        if (VIMA_UNBALANCED && read2_unbalanced != NULL && read2_unbalanced->status != PACKAGE_STATE_READY) return;
     }
 
-    if (vima_buffer[index]->vima_read2_vec != NULL){
-        if (vima_buffer[index]->vima_read2_vec->status != PACKAGE_STATE_READY) return;
-        else {
-            vima_buffer[index]->vima_read2_vec->set_lru (orcs_engine.get_global_cycle());
-            vima_buffer[index]->vima_read2_vec->taken = false;
-        }
-        if (VIMA_UNBALANCED && read2_unbalanced != NULL){
-            if (read2_unbalanced->status != PACKAGE_STATE_READY) return;
-        }
+    /// The destination line was taken when the instruction entered (can_enter)
+    vima_vector_t* destination = instruction->vima_write_vec;
+    if (destination != NULL){
+        if (destination->dirty){
+            this->add_cache_writebacks();
+            destination->status = PACKAGE_STATE_TRANSMIT;
+        } else destination->status = PACKAGE_STATE_WAIT;
+
+        destination->set_next_address (instruction->vima_write);
+        destination->set_tag (get_tag (instruction->vima_write));
+        destination->dirty = true;
     }
 
-    if (vima_buffer[index]->vima_write_vec == NULL){
-        cache_status_t result = HIT;
-        vima_buffer[index]->vima_write_vec = search_cache (vima_buffer[index]->vima_write, &result);
-        if (vima_buffer[index]->vima_write_vec == NULL) return;
-        write_lookup_latency = this->get_VIMA_CACHE_LATENCY();
+    release_line (instruction->vima_read1_vec);
+    release_line (instruction->vima_read2_vec);
+    release_line (destination);
 
-        if (vima_buffer[index]->memory_operation == MEMORY_OPERATION_VIMA_SCATTER) result = MISS;
-        if (result == MISS) {
-            this->add_cache_misses();
-            if (vima_buffer[index]->vima_write_vec->dirty){
-                this->add_cache_writebacks();
-                vima_buffer[index]->vima_write_vec->status = PACKAGE_STATE_TRANSMIT;
-            } else vima_buffer[index]->vima_write_vec->status = PACKAGE_STATE_WAIT;
-        } else this->add_cache_hits();
+    instruction->updatePackageWait (this->vima_op_latencies[instruction->memory_operation]);
+}
+
+/// An instruction enters only when it can take every line it needs at once:
+/// no source or destination is waiting on an older write (store_hash), and
+/// there are enough unused lines for all its distinct vectors. Taking lines
+/// one at a time let younger instructions hold every line while the oldest,
+/// which completes first, still needed its destination: a deadlock.
+bool vima_controller_t::can_enter (int index){
+    memory_package_t* instruction = vima_buffer[index];
+    uint64_t addresses[3] = { instruction->vima_read1, instruction->vima_read2, instruction->vima_write };
+    uint32_t distinct = 0;
+
+    for (uint32_t a = 0; a < 3; a++){
+        if (addresses[a] == 0) continue;
+        if (store_hash[(addresses[a] >> index_bits_shift) % 1024] != 0) return false;
+        bool repeated = false;
+        for (uint32_t b = 0; b < a; b++) if (addresses[b] == addresses[a]) repeated = true;
+        if (!repeated) distinct++;
     }
 
-    if (vima_buffer[index]->vima_write_vec->dirty){
-        this->add_cache_writebacks();
-        vima_buffer[index]->vima_write_vec->status = PACKAGE_STATE_TRANSMIT;
-    } else vima_buffer[index]->vima_write_vec->status = PACKAGE_STATE_WAIT;
+    uint32_t unused = 0;
+    for (uint32_t i = 0; i < sets; i++)
+        for (size_t j = 0; j < VIMA_CACHE_ASSOCIATIVITY; j++)
+            if (this->cache[i][j].users == 0) unused++;
+    return unused >= distinct;
+}
 
-    vima_buffer[index]->vima_write_vec->set_next_address (vima_buffer[index]->vima_write);
-    vima_buffer[index]->vima_write_vec->set_tag (get_tag (vima_buffer[index]->vima_write));
-    vima_buffer[index]->vima_write_vec->set_lru (orcs_engine.get_global_cycle());
-    vima_buffer[index]->vima_write_vec->dirty = true;
-    vima_buffer[index]->vima_write_vec->taken = false;
-
-    vima_buffer[index]->updatePackageWait (this->vima_op_latencies[vima_buffer[index]->memory_operation] + write_lookup_latency);
+/// Finds the line of a vector (hit) or a victim for it (miss) and takes it
+vima_vector_t* vima_controller_t::acquire_line (uint64_t address, cache_status_t* result){
+    vima_vector_t* line = search_cache (address, result);
+    ERROR_ASSERT_PRINTF (line != NULL, "VIMA instruction admitted without a free cache line")
+    line->users++;
+    this->current_cache_access_latency += this->get_VIMA_CACHE_LATENCY();
+    return line;
 }
 
 void vima_controller_t::clock(){
@@ -240,8 +261,13 @@ void vima_controller_t::clock(){
     
     if (vima_buffer_count == 0) return;
     uint32_t index = 0;
-    for (uint32_t i = 0; i < vima_buffer_count; i++){
-        index = (vima_buffer_start + i) % VIMA_BUFFER;
+    bool older_waiting = false;   /// Instructions enter in order: none passes an older one
+    /// instruction_ready() moves the buffer start while the loop runs: walk a snapshot,
+    /// or the instruction after a finished one is skipped (and passed by younger ones)
+    const uint32_t first = vima_buffer_start;
+    const uint32_t count = vima_buffer_count;
+    for (uint32_t i = 0; i < count; i++){
+        index = (first + i) % VIMA_BUFFER;
 
         switch (vima_buffer[index]->status){
             case PACKAGE_STATE_WAIT:
@@ -257,88 +283,83 @@ void vima_controller_t::clock(){
             case PACKAGE_STATE_TRANSMIT:
                 if (index == vima_buffer_start) this->check_completion (vima_buffer_start);
                 break;
-            case PACKAGE_STATE_VIMA:
+            case PACKAGE_STATE_VIMA: {
+                if (older_waiting || !this->can_enter (index)) {
+                    older_waiting = true;
+                    break;
+                }
+                memory_package_t* instruction = vima_buffer[index];
                 read1_d = false;
                 read2_d = false;
                 write_d = false;
 
-                if (vima_buffer[index]->vima_read1 != 0 && vima_buffer[index]->vima_read1_vec == NULL) {
-                    if (store_hash[(vima_buffer[index]->vima_read1 >> index_bits_shift) % 1024] == 0) {
+                #if VIMA_DEBUG
+                    ORCS_PRINTF ("%lu IN  VIMA %s -> %lu | processor: %u", orcs_engine.get_global_cycle(), get_enum_memory_operation_char (instruction->memory_operation), instruction->uop_number, instruction->processor_id)
+                    if (instruction->vima_read1 != 0) ORCS_PRINTF (" | READ1: [%lu]", instruction->vima_read1)
+                    if (instruction->vima_read2 != 0) ORCS_PRINTF (" | READ2: [%lu]", instruction->vima_read2)
+                    if (instruction->vima_write != 0) ORCS_PRINTF (" | WRITE: [%lu]", instruction->vima_write)
+                    ORCS_PRINTF ("\n")
+                #endif
+
+                if (instruction->vima_read1 != 0) {
+                    cache_status_t result = MISS;
+                    instruction->vima_read1_vec = this->acquire_line (instruction->vima_read1, &result);
+                    this->add_cache_accesses();
+                    this->add_cache_reads();
+
+                    if (instruction->memory_operation == MEMORY_OPERATION_VIMA_GATHER) result = MISS;
+
+                    if (result == MISS) {
+                        this->add_cache_misses();
+                        if (instruction->vima_read1_vec->dirty){
+                            this->add_cache_writebacks();
+                            instruction->vima_read1_vec->status = PACKAGE_STATE_TRANSMIT;
+                        } else instruction->vima_read1_vec->status = PACKAGE_STATE_WAIT;
+                    } else this->add_cache_hits();
+                    instruction->vima_read1_vec->set_next_address (instruction->vima_read1);
+                    instruction->vima_read1_vec->set_tag (get_tag (instruction->vima_read1));
+                }
+                if (instruction->vima_read2 != 0) {
+                    cache_status_t result = MISS;
+                    instruction->vima_read2_vec = this->acquire_line (instruction->vima_read2, &result);
+                    this->add_cache_accesses();
+                    this->add_cache_reads();
+
+                    if (result == MISS) {
+                        this->add_cache_misses();
+                        if (instruction->vima_read2_vec->dirty){
+                            this->add_cache_writebacks();
+                            instruction->vima_read2_vec->status = PACKAGE_STATE_TRANSMIT;
+                        } else instruction->vima_read2_vec->status = PACKAGE_STATE_WAIT;
+                    } else this->add_cache_hits();
+                    instruction->vima_read2_vec->set_next_address (instruction->vima_read2);
+                    instruction->vima_read2_vec->set_tag (get_tag (instruction->vima_read2));
+                }
+                if (instruction->vima_write != 0) {
+                    if (instruction->vima_write == instruction->vima_read1) {
+                        instruction->vima_write_vec = instruction->vima_read1_vec;   /// In place: same line
+                        instruction->vima_write_vec->users++;
+                    } else if (instruction->vima_write == instruction->vima_read2) {
+                        instruction->vima_write_vec = instruction->vima_read2_vec;
+                        instruction->vima_write_vec->users++;
+                    } else {
                         cache_status_t result = MISS;
-                        vima_buffer[index]->vima_read1_vec = search_cache (vima_buffer[index]->vima_read1, &result);
-                        if (vima_buffer[index]->vima_read1_vec == NULL) return;
-                        this->current_cache_access_latency += this->get_VIMA_CACHE_LATENCY();
-                        vima_buffer[index]->vima_read1_vec->taken = true;
-
-                        #if VIMA_DEBUG
-                            ORCS_PRINTF ("%lu IN  VIMA %s -> %lu | processor: %u", orcs_engine.get_global_cycle(), get_enum_memory_operation_char (vima_buffer[index]->memory_operation), vima_buffer[index]->uop_number, vima_buffer[index]->processor_id)
-                            if (vima_buffer[index]->vima_read1 != 0) ORCS_PRINTF (" | READ1: [%lu]", vima_buffer[index]->vima_read1)
-                            if (vima_buffer[index]->vima_read2 != 0) ORCS_PRINTF (" | READ2: [%lu]", vima_buffer[index]->vima_read2)
-                            if (vima_buffer[index]->vima_write != 0) ORCS_PRINTF (" | WRITE: [%lu]", vima_buffer[index]->vima_write)
-                            ORCS_PRINTF ("\n")
-                        #endif
-
-                        this->add_cache_accesses();
-                        this->add_cache_reads();
-
-                        if (vima_buffer[index]->memory_operation == MEMORY_OPERATION_VIMA_GATHER) result = MISS;
-
-                        if (result == MISS) {
-                            this->add_cache_misses();
-                            if (vima_buffer[index]->vima_read1_vec->dirty){
-                                this->add_cache_writebacks();
-                                vima_buffer[index]->vima_read1_vec->status = PACKAGE_STATE_TRANSMIT;
-                            } else vima_buffer[index]->vima_read1_vec->status = PACKAGE_STATE_WAIT;
-                        } else this->add_cache_hits();
-                        vima_buffer[index]->vima_read1_vec->set_next_address (vima_buffer[index]->vima_read1);
-                        vima_buffer[index]->vima_read1_vec->set_tag (get_tag (vima_buffer[index]->vima_read1));
+                        instruction->vima_write_vec = this->acquire_line (instruction->vima_write, &result);
+                        if (instruction->memory_operation == MEMORY_OPERATION_VIMA_SCATTER) result = MISS;
+                        if (result == MISS) this->add_cache_misses();
+                        else this->add_cache_hits();
                     }
-                }
-                if (vima_buffer[index]->vima_read2 != 0 && vima_buffer[index]->vima_read2_vec == NULL) {
-                    if (store_hash[(vima_buffer[index]->vima_read2 >> index_bits_shift) % 1024] == 0) {
-                        cache_status_t result = MISS;
-                        vima_buffer[index]->vima_read2_vec = search_cache (vima_buffer[index]->vima_read2, &result);
-                        if (vima_buffer[index]->vima_read2_vec == NULL) return;
-                        this->current_cache_access_latency += this->get_VIMA_CACHE_LATENCY();
-                        vima_buffer[index]->vima_read2_vec->taken = true;
 
-                        this->add_cache_accesses();
-                        this->add_cache_reads();
-
-                        if (result == MISS) {
-                            this->add_cache_misses();
-                            if (vima_buffer[index]->vima_read2_vec->dirty){
-                                this->add_cache_writebacks();
-                                vima_buffer[index]->vima_read2_vec->status = PACKAGE_STATE_TRANSMIT;
-                            } else vima_buffer[index]->vima_read2_vec->status = PACKAGE_STATE_WAIT;
-                        } else this->add_cache_hits();
-                        vima_buffer[index]->vima_read2_vec->set_next_address (vima_buffer[index]->vima_read2);
-                        vima_buffer[index]->vima_read2_vec->set_tag (get_tag (vima_buffer[index]->vima_read2));
-                    }
+                    this->add_cache_accesses();
+                    this->add_cache_writes();
+                    store_hash[(instruction->vima_write >> index_bits_shift) % 1024] = 1;
                 }
-                if (vima_buffer[index]->vima_write != 0 && vima_buffer[index]->vima_write_vec == NULL) {
-                    if (store_hash[(vima_buffer[index]->vima_write >> index_bits_shift) % 1024] == 0) {
-                        if (vima_buffer[index]->vima_write != vima_buffer[index]->vima_read1 && vima_buffer[index]->vima_write != vima_buffer[index]->vima_read2){
-                            cache_status_t result = MISS;
-                            vima_buffer[index]->vima_write_vec = search_cache (vima_buffer[index]->vima_write, &result);
-                            if (vima_buffer[index]->vima_write_vec == NULL) return;
-                            this->current_cache_access_latency += this->get_VIMA_CACHE_LATENCY();
-                            vima_buffer[index]->vima_write_vec->taken = true;
-                            if (result == MISS) this->add_cache_misses();
-                            else this->add_cache_hits();
-                        }
 
-                        this->add_cache_accesses();
-                        this->add_cache_writes();
-                        store_hash[(vima_buffer[index]->vima_write >> index_bits_shift) % 1024] = 1;
-                    }
-                }
-                
-                /// Latency of this instruction's own lookups (kept across retries of a
-                /// lookup that found no free line), then cleared for the next instruction
-                vima_buffer[index]->updatePackageTransmit(this->current_cache_access_latency);
+                /// Latency of this instruction's own lookups, then cleared for the next one
+                instruction->updatePackageTransmit(this->current_cache_access_latency);
                 this->current_cache_access_latency = 0;
                 break;
+            }
             default:
                 ///ORCS_PRINTF ("%lu %s -> \n", vima_buffer[index]->uop_number, get_enum_package_state_char (vima_buffer[index]->status))
                 //vima_buffer.erase (std::remove (vima_buffer.begin(), vima_buffer.end(), vima_buffer[index]), vima_buffer.end());

@@ -19,7 +19,7 @@ class vima_vector_t {
         bool gather;
         bool scatter;
         bool dirty;
-        bool taken;
+        uint32_t users;     /// VIMA instructions holding this line (sources and destination); evictable only at 0
 
         uint64_t fetch_start;
         uint64_t fetch_count;

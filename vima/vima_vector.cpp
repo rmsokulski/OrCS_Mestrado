@@ -158,7 +158,7 @@ void vima_vector_t::allocate() {
         sub_requests[i].memory_size = get_LINE_SIZE();
     }
 
-    taken = false;
+    users = 0;
     status = PACKAGE_STATE_FREE;
     sub_ready = no_sub_requests;
     sub_req_offset = utils_t::get_power_of_two(LINE_SIZE);
