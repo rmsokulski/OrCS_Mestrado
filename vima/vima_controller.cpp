@@ -122,7 +122,6 @@ vima_vector_t* vima_controller_t::search_cache (uint64_t address, cache_status_t
     uint64_t lru_cycle = UINT64_MAX;
     int32_t lru_way = -1;
     int32_t index = 0;
-    this->current_cache_access_latency += this->get_VIMA_CACHE_LATENCY();
     if (VIMA_CACHE_ASSOCIATIVITY == 1){
         index = get_index (address);
         for (uint32_t i = 0; i < get_lines(); i++){
@@ -173,10 +172,13 @@ vima_vector_t* vima_controller_t::search_cache (uint64_t address, cache_status_t
             ret = &cache[lru_way][0];
         }
     }
+    /// A lookup that found no free line is retried next cycle; only a lookup that
+    /// gets a line costs the cache latency, charged by the caller to its instruction
     return ret;
 }
 
 void vima_controller_t::check_completion (int index){
+    uint32_t write_lookup_latency = 0;   /// Destination lookup made here, not when the instruction entered
     if (vima_buffer[index]->vima_read1_vec != NULL){
         if (vima_buffer[index]->vima_read1_vec->status != PACKAGE_STATE_READY) return;
         else {
@@ -203,7 +205,8 @@ void vima_controller_t::check_completion (int index){
         cache_status_t result = HIT;
         vima_buffer[index]->vima_write_vec = search_cache (vima_buffer[index]->vima_write, &result);
         if (vima_buffer[index]->vima_write_vec == NULL) return;
-            
+        write_lookup_latency = this->get_VIMA_CACHE_LATENCY();
+
         if (vima_buffer[index]->memory_operation == MEMORY_OPERATION_VIMA_SCATTER) result = MISS;
         if (result == MISS) {
             this->add_cache_misses();
@@ -225,7 +228,7 @@ void vima_controller_t::check_completion (int index){
     vima_buffer[index]->vima_write_vec->dirty = true;
     vima_buffer[index]->vima_write_vec->taken = false;
 
-    vima_buffer[index]->updatePackageWait (this->vima_op_latencies[vima_buffer[index]->memory_operation]);
+    vima_buffer[index]->updatePackageWait (this->vima_op_latencies[vima_buffer[index]->memory_operation] + write_lookup_latency);
 }
 
 void vima_controller_t::clock(){
@@ -264,6 +267,7 @@ void vima_controller_t::clock(){
                         cache_status_t result = MISS;
                         vima_buffer[index]->vima_read1_vec = search_cache (vima_buffer[index]->vima_read1, &result);
                         if (vima_buffer[index]->vima_read1_vec == NULL) return;
+                        this->current_cache_access_latency += this->get_VIMA_CACHE_LATENCY();
                         vima_buffer[index]->vima_read1_vec->taken = true;
 
                         #if VIMA_DEBUG
@@ -295,6 +299,7 @@ void vima_controller_t::clock(){
                         cache_status_t result = MISS;
                         vima_buffer[index]->vima_read2_vec = search_cache (vima_buffer[index]->vima_read2, &result);
                         if (vima_buffer[index]->vima_read2_vec == NULL) return;
+                        this->current_cache_access_latency += this->get_VIMA_CACHE_LATENCY();
                         vima_buffer[index]->vima_read2_vec->taken = true;
 
                         this->add_cache_accesses();
@@ -317,6 +322,7 @@ void vima_controller_t::clock(){
                             cache_status_t result = MISS;
                             vima_buffer[index]->vima_write_vec = search_cache (vima_buffer[index]->vima_write, &result);
                             if (vima_buffer[index]->vima_write_vec == NULL) return;
+                            this->current_cache_access_latency += this->get_VIMA_CACHE_LATENCY();
                             vima_buffer[index]->vima_write_vec->taken = true;
                             if (result == MISS) this->add_cache_misses();
                             else this->add_cache_hits();
@@ -328,7 +334,10 @@ void vima_controller_t::clock(){
                     }
                 }
                 
+                /// Latency of this instruction's own lookups (kept across retries of a
+                /// lookup that found no free line), then cleared for the next instruction
                 vima_buffer[index]->updatePackageTransmit(this->current_cache_access_latency);
+                this->current_cache_access_latency = 0;
                 break;
             default:
                 ///ORCS_PRINTF ("%lu %s -> \n", vima_buffer[index]->uop_number, get_enum_package_state_char (vima_buffer[index]->status))
