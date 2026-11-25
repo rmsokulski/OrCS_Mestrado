@@ -142,11 +142,8 @@ void cache_t::allocate(uint32_t NUMBER_OF_PROCESSORS, uint32_t INSTRUCTION_LEVEL
 
 // Return address index in cache
 inline void cache_t::tagIdxSetCalculation(uint64_t address, uint64_t *idx, uint64_t *tag) {
-	uint32_t get_bits = (this->n_sets) - 1;
-	*tag = (address >> this->offset);
-	*idx = *tag & get_bits;
-	// *tag >>= utils_t::get_power_of_two(this->n_sets);
-	// printf("tag: %lu idx: %u address: %lu\n", *tag, *idx, address);
+	*tag = addr_tag(address);
+	*idx = addr_idx(address);
 }
 
 // void cache_t::printTagIdx (uint64_t address){
@@ -167,7 +164,7 @@ bool cache_t::peek(uint64_t address) {
     // 2. Itera sobre todas as linhas (vias) do conjunto
     for (size_t i = 0; i < this->sets[idx].n_lines; i++) {
         // Verifica se a linha é válida E se a tag corresponde
-        if (this->sets[idx].lines[i].valid == 1 && this->sets[idx].lines[i].tag == tag) {
+        if (this->sets[idx].lines[i].valid == 1 && this->line_tag(&this->sets[idx].lines[i]) == tag) {
             return true; // Está na cache (HIT)
         }
     }
@@ -186,7 +183,7 @@ uint32_t cache_t::read(uint64_t address, uint32_t &ttc){
 	if (this->get_concurrent_cache_accesses() > this->get_max_reached()) this->set_max_reached(this->get_concurrent_cache_accesses());
 	for (size_t i = 0; i < this->sets->n_lines; i++) {
 		//printf("tag: %u\n", this->sets[idx].lines[i].dirty);
-		if(this->sets[idx].lines[i].tag == tag) {
+		if (this->sets[idx].lines[i].valid && this->line_tag(&this->sets[idx].lines[i]) == tag) {
 			// Se ready Cycle for menor que o ciclo atual, a latencia é apenas da leitura, sendo um hit.
 			if (this->sets[idx].lines[i].ready_at <= orcs_engine.get_global_cycle()){
 				if (PREFETCHER_ACTIVE){
@@ -302,7 +299,7 @@ void cache_t::evict(line_t *victim, uint32_t processor_id) {
 	const uint32_t L = this->level;
 	const bool is_llc = (L == DATA_LEVELS - 1);
 	const bool remove_upper = !is_llc || this->inclusive;
-	const uint64_t victim_address = victim->tag << this->offset;
+	const uint64_t victim_address = victim->address_line;
 
 	if (remove_upper) {
 		for (uint32_t p = 0; p < victim->get_NUMBER_OF_PROCESSORS(); p++) {
@@ -318,7 +315,7 @@ void cache_t::evict(line_t *victim, uint32_t processor_id) {
 			}
 			for (uint32_t u = 0; u < L; u++) {
 				line_t *copy = upper[u];
-				if (copy == NULL || !copy->valid || copy->tag != victim->tag) continue;
+				if (copy == NULL || !copy->valid || copy->address_line != victim->address_line) continue;
 				if (copy->dirty) victim->dirty = 1;   /// newer data than the victim
 				this->unlink_line(copy, u);
 				copy->clean_line();
@@ -333,7 +330,7 @@ void cache_t::evict(line_t *victim, uint32_t processor_id) {
 		if (!is_llc) {
 			for (uint32_t p = 0; p < victim->get_NUMBER_OF_PROCESSORS() && !written; p++) {
 				line_t *next = victim->line_ptr_caches[p][L + 1];
-				if (next != NULL && next->valid && next->tag == victim->tag) {
+				if (next != NULL && next->valid && next->address_line == victim->address_line) {
 					next->dirty = 1;
 					written = true;
 				}
@@ -381,7 +378,8 @@ line_t* cache_t::installLine(memory_package_t* request, uint32_t latency, uint64
 	// -----------------------------------------------------------------------------------------
     // Insere o novo dado
     // -----------------------------------------------------------------------------------------
-	this->sets[idx].lines[line].tag = tag;
+	/// The line holds this address; its tag/index at any level come from it
+	this->sets[idx].lines[line].address_line = request->memory_address & ~((uint64_t)this->LINE_SIZE - 1);
 	this->sets[idx].lines[line].lru = orcs_engine.get_global_cycle() + latency;
 	this->sets[idx].lines[line].valid = 1;
 	this->sets[idx].lines[line].dirty = 0;
@@ -399,7 +397,7 @@ void cache_t::returnLine(memory_package_t* request, cache_t *cache) {
 	int32_t line = POSITION_FAIL;
 	// Selects a line in this cache
 	for (size_t i = 0; i < this->sets->n_lines; i++) {
-		if (this->sets[idx].lines[i].tag == tag) {
+		if (this->sets[idx].lines[i].valid && this->line_tag(&this->sets[idx].lines[i]) == tag) {
 			this->sets[idx].lines[i].lru = orcs_engine.get_global_cycle();
 			line = i;
 			break;
@@ -438,7 +436,7 @@ bool cache_t::mark_dirty(uint64_t address) {
 	this->tagIdxSetCalculation(address, &idx, &tag);
 	for (size_t i = 0; i < this->sets[idx].n_lines; i++) {
 		line_t *l = &this->sets[idx].lines[i];
-		if (l->valid && l->tag == tag) {
+		if (l->valid && this->line_tag(l) == tag) {
 			l->dirty = 1;
 			l->lru = (l->ready_at <= orcs_engine.get_global_cycle()) ? orcs_engine.get_global_cycle() : l->ready_at + this->latency;
 			return true;
@@ -456,7 +454,7 @@ uint32_t cache_t::write(memory_package_t* request){
 	int32_t line = POSITION_FAIL;
 	this->add_cache_write();
     for (size_t i = 0; i < this->sets->n_lines; i++) {
-		if(this->sets[idx].lines[i].tag == tag){
+		if (this->sets[idx].lines[i].valid && this->line_tag(&this->sets[idx].lines[i]) == tag) {
 			line = i;
 			break;
 		}

@@ -1362,13 +1362,13 @@ void cache_manager_t::check_consistency() {
                         for (uint32_t p = 0; p < NUMBER_OF_PROCESSORS; p++) {
                             for (uint32_t k = 0; k < POINTER_LEVELS; k++) {
                                 line_t *q = l->line_ptr_caches[p][k];
-                                if (q != NULL && (!q->valid || q->tag != l->tag)) bad_pointers++;
+                                if (q != NULL && (!q->valid || q->address_line != l->address_line)) bad_pointers++;
                             }
                         }
                         if (inclusive && !(t == 1 && lv == DATA_LEVELS - 1)) {
                             bool found = false;
                             for (uint32_t m = 0; m < llc_amount && !found; m++) {
-                                found = llc[m].peek(l->tag << c->offset);
+                                found = llc[m].peek(l->address_line);
                             }
                             if (!found) not_in_llc++;
                         }

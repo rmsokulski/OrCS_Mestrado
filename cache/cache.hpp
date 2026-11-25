@@ -88,6 +88,12 @@ class cache_t {
         void evict(line_t *victim, uint32_t processor_id); //remove a valid line before reusing its slot
         void returnLine(memory_package_t* request, cache_t *cache);//return line from lower cache level
         void tagIdxSetCalculation(uint64_t address, uint64_t *idx, uint64_t *tag); //calculate index of data, makes tag from address
+        /// Tag and set index of an address, or of the address a line holds, in
+        /// this cache (a line stores its address; the tag depends on the level)
+        inline uint64_t addr_tag(uint64_t address) { return address >> this->offset; }
+        inline uint64_t addr_idx(uint64_t address) { return (address >> this->offset) & (this->n_sets - 1); }
+        inline uint64_t line_tag(const line_t *line) { return addr_tag(line->address_line); }
+        inline uint64_t line_idx(const line_t *line) { return addr_idx(line->address_line); }
         uint32_t searchLru(cacheSet_t *set);//searh LRU to substitue
         bool peek(uint64_t address);
         uint32_t read(uint64_t address, uint32_t &ttc);

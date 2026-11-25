@@ -7,7 +7,8 @@ class line_t {
         uint32_t POINTER_LEVELS;
 
     public:
-        uint64_t tag;
+        uint64_t address_line;   ///< line-aligned memory address held by this line (UINT64_MAX = none);
+                                 ///< the tag and set index depend on the cache level: cache_t::line_tag / line_idx
         uint32_t dirty;
         uint64_t lru;
         uint32_t prefetched;
@@ -44,7 +45,7 @@ class line_t {
         }
 
         void clean_line() {
-            this->tag = POSITION_FAIL;
+            this->address_line = UINT64_MAX;
             this->dirty = 0;
             this->lru = UINT64_MAX;
             this->prefetched = 0;
@@ -55,7 +56,7 @@ class line_t {
         }
 
         void print_line(){
-            ORCS_PRINTF ("tag: %lu, dirty: %u, prefetched: %u, valid: %u\n", tag, dirty, prefetched, valid)
+            ORCS_PRINTF ("address: %lu, dirty: %u, prefetched: %u, valid: %u\n", address_line, dirty, prefetched, valid)
             
             //ORCS_PRINTF ("tag: %lu, dirty: %u, lru: %lu, prefetched: %u, valid: %u, ready_at: %lu\n", tag, dirty, lru, prefetched, valid, ready_at)
         }
