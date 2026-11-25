@@ -58,7 +58,9 @@ After the fixes below, the four VIMA scans finish (100k-row input): 2.8–4.1 M 
 
 ## 4. Found while investigating section 3
 
-- [ ] **`fmovs` (broadcast) fetches its destination.** The tracer records 1-operand instructions as read and written at the destination (`hmc_write_memory_1param`), so OrCS sees an in-place operation and fetches 8 KB before overwriting it (region 1: 128 requests for one `fmovs`). The destination of a broadcast should be write-only.
+- [x] **`fmovs` (broadcast) fetches its destination.** Fixed in e429a43 (tracer): broadcasts are recorded as write-only. VIMA scans (100k rows): 7–13 fewer 8 KB fetches each, cycles within ±2%. Also 2dae364: the tracer now rebuilds when its `#include`d sources change.
+
+  Original finding: The tracer records 1-operand instructions as read and written at the destination (`hmc_write_memory_1param`), so OrCS sees an in-place operation and fetches 8 KB before overwriting it (region 1: 128 requests for one `fmovs`). The destination of a broadcast should be write-only.
 - [ ] **No coherence between the VIMA cache and the CPU caches.** In selvec, the CPU writes the row ids into its caches and VIMA reads them from DRAM; CPU accesses to VIMA results also go through the CPU caches. Santos (2022) assumes VIMA data lives in a non-cacheable region (Sec. 4.4); OrCS does not model it.
 
 - [ ] **Every DRAM request becomes row-sized sub-requests.** `requestDRAM` splits any request into `BANK_ROW_BUFFER_SIZE` (8 KB) sub-requests, and the channel is selected by the bits just above the row (`channel_bits_shift = log2(BANK_ROW_BUFFER_SIZE)`). A vector fetch sends 128 line requests that all map to one channel and one row. Likely cause of "8 KB fetches are serialized" (section 2). Check what each sub-request costs before changing it.
