@@ -32,7 +32,24 @@ After the fixes below, the four VIMA scans finish (100k-row input): 2.8–4.1 M 
 
 ## 3. Open: other findings
 
-- [ ] **`VIMA_Cache_Avg._Fetch_Latency` reports 1** while fetches take thousands of cycles. Check how `fetch_latency_total` and `fetch_count` are summed in `vima_controller_t::statistics`.
-- [ ] **Gathers are traced as one 8 KB read at the base address** (`sinuca_tracer`, `fgtrs`), not the gathered addresses, so OrCS undercounts gather traffic. Affects the `vima_selvec_*` scans.
-- [ ] **Unaligned operands not tested.** The scans pass `column + first_row`, so their vectors start mid-block; `vecsum` uses 8 KB-aligned arrays. With `VIMA_UNBALANCED = 0` the controller treats them as aligned. Check whether that hides traffic a real VIMA would have.
-- [ ] **The processor sends VIMA instructions out of order.** It sends a VIMA instruction once its dependencies resolve, so in region 2 instruction 46 reached the controller after 69 and 74, which overwrite 46's sources. Entry in order now keeps the controller correct, but check whether the processor's ordering is intended.
+- [x] **`VIMA_Cache_Avg._Fetch_Latency` reports 1** while fetches take thousands of cycles. The fetch and writeback counters were never initialised (~1e14 / ~1e14), and the totals read only way 0 of each set. Fixed in 4b075eb; region 2 now reports 6,519 cycles per fetch.
+- [ ] **VIMA results are never written back to DRAM.** Found with the fixed stats: `VIMA_Cache_Writebacks` is 0. At completion the destination is marked dirty and set to WAIT (it fetches the old 8 KB), and `fetch()` sets `dirty = false` when it finishes (`vima_vector.cpp:66`), so the result is marked clean. Fix together with "destinations are fetched before being overwritten" (section 2).
+- [ ] **Gathers fetch the wrong lines.** The tracer records `fgtrs` as (base, indices, destination), and the controller fetches the source as 8 KB contiguous from `base`, forced to miss. A real 2048-element gather touches up to 2048 lines spread over the column: OrCS undercounts gather traffic up to 16× and fetches the wrong addresses. `vima_vector_t::gather` (random addresses) is never set, and random addresses would not be better. Decide: record the gathered addresses in the trace (tracer + trace format + controller), or another model. Affects the `vima_selvec_*` scans.
+- [ ] **Unaligned operands: small effect today, two latent issues.** In the large-input scan traces 51–89% of vectors are unaligned (e.g. 135 of 186 in `vima_bitmap_reeval`). Measured over all 8 VIMA scan traces: no two different vectors share an 8 KB-aligned block, so no false hits yet. Latent issues:
+  - The VIMA cache identifies a vector by its 8 KB-aligned block (tag and index drop the low 13 bits), so two unaligned vectors starting in the same block would be treated as one (false hit). `store_hash` aliases the same way (only over-serializes).
+  - `read1_unbalanced`/`read2_unbalanced` are never assigned, so `VIMA_UNBALANCED = 1` does nothing.
+  In DRAM, an unaligned vector spans 2 rows and 2 channels; one line request crosses the row boundary and becomes 2 sub-requests.
+- [x] **VIMA instructions have no memory dependencies.** Fixed following Santos (2022): VIMA executes and commits strictly in order (Sec. 4.8–4.10), and the programmer orders CPU accesses to VIMA data (Sec. 4.4).
+  - 8c466ed: VIMA instructions are sent to the controller in program order (the traces were already in order; no cycle change).
+  - e05bfb3: VIMA entries skip memory disambiguation (no slot-0 collision in our traces; no cycle change).
+  - c900f25, 8c487ea: `_vim_fence()` writes `$5` (`SYNC_VIMA_FENCE`); OrCS drains the core there. The scans fence before every CPU read of a VIMA result. VIMA scans: −1% to +3% cycles, 1.4–1.9 M cycles of drain stalls (the ROB already made the CPU wait).
+
+  Original finding: The VIMA MOB line never sets `memory_address` (it stays 0 after `package_clean`), and `make_memory_dependences` only adds READ and WRITE operations to the hashes. So:
+  - VIMA instructions have no RAW/WAR/WAW order among themselves in the processor; they are sent whenever ready. In region 2, instruction 69 overwrote the sources of the older instruction 46 before 46 ran (WAR). The controller's `store_hash` only orders by arrival.
+  - CPU loads of a VIMA result (e.g. `fcums` → `result[0]` in the scans) do not wait for the VIMA write, so dependent CPU work starts early and the VIMA round-trip is not timed.
+  - Every VIMA instruction checks hash bucket 0 (address 0) and can pick up spurious dependencies on unrelated loads and stores there.
+  Decide: track VIMA operands (3 × 8 KB ranges) in disambiguation, or send VIMA instructions to the controller in program order and make CPU loads wait on pending VIMA writes.
+
+## 4. Found while investigating section 3
+
+- [ ] **Every DRAM request becomes row-sized sub-requests.** `requestDRAM` splits any request into `BANK_ROW_BUFFER_SIZE` (8 KB) sub-requests, and the channel is selected by the bits just above the row (`channel_bits_shift = log2(BANK_ROW_BUFFER_SIZE)`). A vector fetch sends 128 line requests that all map to one channel and one row. Likely cause of "8 KB fetches are serialized" (section 2). Check what each sub-request costs before changing it.
