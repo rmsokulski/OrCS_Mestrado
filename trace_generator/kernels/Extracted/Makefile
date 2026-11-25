@@ -26,6 +26,9 @@ $(OBJ)/%.o: SIMD_Parallel/%.c | $(OBJ) ; $(CC) $(CFLAGS) $(AVX512) -c $< -o $@
 
 $(OBJ): ; mkdir -p $@
 
+# Headers the pattern rules do not see: rebuild the VIMA objects when they change
+$(filter $(OBJ)/%_vima.o $(OBJ)/vima_isa.o,$(OBJS)): VIMA/vima_common.h VIMA/scan_common.h
+
 clean: ; rm -rf $(OBJ) build/scan_main.trace
 
 .PHONY: all clean
