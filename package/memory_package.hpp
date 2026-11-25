@@ -48,6 +48,14 @@ class memory_package_t {
         // cache_manager_t::isIn; applied to the L1 in finishRequest
         uint32_t merged_writes;
 
+        // Merge at the shared LLC (cache_manager_t::merge_at_llc): requests of
+        // other cores that missed this line while it was being fetched, and,
+        // for such a waiter, its state. A waiter takes no LLC MSHR entry.
+        std::vector<memory_package_t *> llc_waiters;
+        bool llc_parked;          // waiting for the owner's line
+        bool llc_merged;          // its LLC miss merged with another core's
+        uint64_t llc_merge_cycle; // cycle it merged (LLC latency statistic)
+
         // Request many Cache Lines
         std::vector<memory_package_t *> subrequest_from; // This is a subrequest package inside a Cache Level or DRAM
         uint32_t num_subrequests; // This package generated some subrequests. This is the number used to track the ones still in flight

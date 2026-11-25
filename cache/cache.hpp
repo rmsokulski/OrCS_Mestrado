@@ -13,6 +13,7 @@ class cache_t {
         uint64_t cache_back_invalidation; ///< upper-level copies removed by this cache's evictions
         uint64_t cache_write_merged;  ///< writes merged into a pending request (secondary misses)
         uint64_t cache_write_merged_missing; ///< ... whose line had already left this cache
+        uint64_t cache_merged_miss;   ///< misses merged with another core's miss to the same line (no MSHR entry)
         uint64_t cache_read;
         uint64_t cache_write;
         uint64_t cache_inst;
@@ -115,6 +116,7 @@ class cache_t {
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_back_invalidation)
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_write_merged)
         INSTANTIATE_GET_SET_ADD(uint64_t,cache_write_merged_missing)
+        INSTANTIATE_GET_SET_ADD(uint64_t,cache_merged_miss)
         INSTANTIATE_GET_SET_ADD(int32_t,concurrent_cache_accesses)
         INSTANTIATE_GET_SET_ADD(int32_t,max_reached)
         INSTANTIATE_GET_SET_ADD(int32_t,mshr_occupied_entries)

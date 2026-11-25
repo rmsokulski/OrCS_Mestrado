@@ -47,6 +47,10 @@ memory_package_t::memory_package_t() {
 
     this->is_load_from_write = false;
     this->merged_writes = 0;
+    this->llc_waiters = std::vector<memory_package_t*>();
+    this->llc_parked = false;
+    this->llc_merged = false;
+    this->llc_merge_cycle = 0;
 
     memory_operation = MEMORY_OPERATION_LAST;    /// memory operation
 }
@@ -227,6 +231,10 @@ void memory_package_t::package_clean() {
 
     this->is_load_from_write = false;
     this->merged_writes = 0;
+    this->llc_waiters = std::vector<memory_package_t*>();
+    this->llc_parked = false;
+    this->llc_merged = false;
+    this->llc_merge_cycle = 0;
 
     memory_operation = MEMORY_OPERATION_LAST;    /// memory operation
 }

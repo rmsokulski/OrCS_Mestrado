@@ -353,6 +353,67 @@ void cache_manager_t::installCacheLines(memory_package_t* request, int32_t *cach
     delete[] CACHE_TAGS;
 }
 
+static inline memory_operation_t stat_operation(memory_package_t *request, uint32_t level);
+
+// =====================================================================
+// Merge at the shared LLC (secondary miss). A request that misses the LLC
+// joins another core's request for the same line that already missed it:
+// it reserves no LLC MSHR entry and makes no DRAM access. It is released,
+// one LLC latency later, when the owner's line is installed.
+bool cache_manager_t::merge_at_llc(memory_package_t *w) {
+    if (w->is_hive || w->is_vima) return false;
+    uint64_t tag = w->memory_address >> this->offset;
+    for (size_t i = 0; i < requests.size(); i++) {
+        memory_package_t *r = requests[i];
+        if (r != w && !r->llc_parked && !r->is_hive && !r->is_vima &&
+            r->processor_id != w->processor_id &&     // same core: already merged by isIn
+            r->type == w->type && r->next_level >= DATA_LEVELS &&   // r missed the LLC
+            (r->memory_address >> this->offset) == tag) {
+            r->llc_waiters.push_back(w);
+            w->llc_parked = true;
+            w->llc_merged = true;
+            return true;
+        }
+    }
+    return false;
+}
+
+// A merged LLC miss is counted like any LLC miss, without an MSHR entry.
+void cache_manager_t::count_llc_secondary_miss(cache_t *llc, memory_package_t *w) {
+    memory_operation_t op = stat_operation(w, llc->level);
+    llc->add_cache_access();
+    llc->add_cache_miss();
+    llc->cache_count_per_type[op]++;
+    llc->cache_miss_per_type[op]++;
+    llc->add_cache_merged_miss();
+    w->llc_merge_cycle = orcs_engine.get_global_cycle();
+}
+
+// The owner's line is now in the LLC: fill each waiter's own upper levels,
+// as an LLC hit, and let it complete one LLC latency later.
+void cache_manager_t::release_llc_waiters(memory_package_t *owner) {
+    int32_t *idx = new int32_t[POINTER_LEVELS]();
+    for (size_t k = 0; k < owner->llc_waiters.size(); k++) {
+        memory_package_t *w = owner->llc_waiters[k];
+        this->generateIndexArray(w->processor_id, idx);
+        cache_t *llc = &this->data_cache[DATA_LEVELS - 1][idx[DATA_LEVELS - 1]];
+        ERROR_ASSERT_PRINTF(llc->peek(w->memory_address), "LLC merge: owner's line is not in the LLC\n")
+        this->fill_upper_levels(w, idx);   /// w->next_level is the LLC
+        w->llc_parked = false;
+        w->updatePackageWait(llc->latency);
+        w->next_level++;
+
+        /// LLC latency statistic, from the merge until it completes
+        memory_operation_t op = stat_operation(w, llc->level);
+        int64_t wait = (int64_t)(orcs_engine.get_global_cycle() + llc->latency - w->llc_merge_cycle);
+        llc->total_per_type[op] += wait;
+        if (wait > llc->max_per_type[op]) llc->max_per_type[op] = wait;
+        if (wait < llc->min_per_type[op]) llc->min_per_type[op] = wait;
+    }
+    owner->llc_waiters.clear();
+    delete[] idx;
+}
+
 // Operation a cache level records in its statistics. A write that missed
 // the L1 is a line fetch (write-allocate) for every level below it: they
 // count it as a read. Only writebacks are writes below the L1.
@@ -533,7 +594,7 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
                 // -----------------------------------------------------------------------------------------
                 // Remove entry from MSHR if it was used
                 // -----------------------------------------------------------------------------------------
-                if (request->sent_to_ram || ((i+1 < MAX_NUM_CACHE_LEVELS) && request->sent_to_cache_level[i+1])) {
+                if (request->sent_to_ram || request->llc_merged || ((i+1 < MAX_NUM_CACHE_LEVELS) && request->sent_to_cache_level[i+1])) {
                     assert(this->instruction_cache[i][cache_indexes[i]].get_mshr_occupied_entries() != 0);
                     this->instruction_cache[i][cache_indexes[i]].mshr_occupied_entries--;
                     this->instruction_cache[i][cache_indexes[i]].set_mshr_stall(false);
@@ -557,7 +618,7 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
                 // -----------------------------------------------------------------------------------------
                 // Remove entry from MSHR if it was used
                 // -----------------------------------------------------------------------------------------
-                if (request->sent_to_ram || ((i+1 < MAX_NUM_CACHE_LEVELS) && request->sent_to_cache_level[i+1])) {
+                if (request->sent_to_ram || request->llc_merged || ((i+1 < MAX_NUM_CACHE_LEVELS) && request->sent_to_cache_level[i+1])) {
                     assert(this->data_cache[i][cache_indexes[i]].get_mshr_occupied_entries() != 0);
                     this->data_cache[i][cache_indexes[i]].mshr_occupied_entries--;
                     this->data_cache[i][cache_indexes[i]].set_mshr_stall(false);
@@ -583,7 +644,7 @@ void cache_manager_t::finishRequest (memory_package_t* request, int32_t* cache_i
                 // -----------------------------------------------------------------------------------------
                 // Remove entry from MSHR if it was used
                 // -----------------------------------------------------------------------------------------
-                if (request->sent_to_ram || ((i+1 < MAX_NUM_CACHE_LEVELS) && request->sent_to_cache_level[i+1])) {
+                if (request->sent_to_ram || request->llc_merged || ((i+1 < MAX_NUM_CACHE_LEVELS) && request->sent_to_cache_level[i+1])) {
                     assert(this->data_cache[i][cache_indexes[i]].get_mshr_occupied_entries() != 0);
                     this->data_cache[i][cache_indexes[i]].mshr_occupied_entries--;
                     this->data_cache[i][cache_indexes[i]].set_mshr_stall(false);
@@ -800,7 +861,13 @@ void cache_manager_t::process (memory_package_t* request, int32_t* cache_indexes
                     // -----------------------------------------------------------------------------------------
                     // Verifica se o nível de cache tem espaço para novas requisições
                     // -----------------------------------------------------------------------------------------
-                    if (!cache->get_mshr_stall()) {
+                    /// A miss at the shared LLC first tries to merge with another
+                    /// core's miss (no MSHR entry, so not blocked by a full MSHR)
+                    if (request->next_level == DATA_LEVELS - 1 && !cache->is_inst_cache &&
+                        !cache->peek(request->memory_address) && this->merge_at_llc(request)) {
+                        this->count_llc_secondary_miss(cache, request);
+                        request->updatePackageTransmit(0);   /// parked: not UNTREATED, not WAIT
+                    } else if (!cache->get_mshr_stall()) {
                         #if MEMORY_DEBUG
                             ORCS_PRINTF (" sent to %s |", get_enum_cache_level_char ((cacheLevel_t) request->next_level))
                         #endif
@@ -821,7 +888,7 @@ void cache_manager_t::process (memory_package_t* request, int32_t* cache_indexes
             // -----------------------------------------------------------------------------------------
             // Caso tenha ultrapassado as caches, envia a requisição para a DRAM.
             // -----------------------------------------------------------------------------------------
-            else if (!request->sent_to_ram) {
+            else if (!request->sent_to_ram && !request->llc_parked) {
                 #if MEMORY_DEBUG 
                     ORCS_PRINTF (" sent to RAM.\n")
                 #endif
@@ -899,6 +966,7 @@ void cache_manager_t::clock() {
                     // Se ele foi completado pela DRAM, instala nas caches
                     // -----------------------------------------------------------------------------------------
                     if (requests[i]->sent_to_ram) this->install (requests[i]);
+                    if (!requests[i]->llc_waiters.empty()) this->release_llc_waiters (requests[i]);
                     
                     // -----------------------------------------------------------------------------------------
                     // Contabiliza estatísticas e remove a requisição
@@ -927,38 +995,10 @@ uint32_t cache_manager_t::searchAddress(uint64_t instructionAddress, cache_t *ca
     return cache_status;
 }
 
-cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t* cache, int32_t* cache_indexes){
-    #if PROCESSOR_DEBUG
-        ORCS_PRINTF ("%lu Cache Manager cache_search(): memory = %lu | level = %u, type = %s, count = %u -> count = %u, %s, %lu\n", orcs_engine.get_global_cycle(), requests.size(), request->next_level, get_enum_cache_type_char ((cacheId_t) cache->id), cache->get_concurrent_cache_accesses(), cache->get_concurrent_cache_accesses()+1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
-    #endif
-
-    // -----------------------------------------------------------------------------------------
-    // Verifica se está no nível da cache (next_level)
-    // -----------------------------------------------------------------------------------------
-
-    uint32_t cache_status = 0, ttc = 0;
-    cache_status = this->searchAddress(request->memory_address, cache, &request->cache_latency, &ttc);
-
-    // -----------------------------------------------------------------------------------------
-    // Will retry later
-    if (cache_status == MSHR_STALL) {
-        return MSHR_STALL;
-    }
-
-    cache->cache_count_per_type[stat_operation(request, cache->level)]++;
-
-    // -----------------------------------------------------------------------------------------
-    // Marca que foi enviado ao nível next_level e em que ciclo isso aconteceu.
-    // -----------------------------------------------------------------------------------------
-    request->sent_to_cache_level[request->next_level] = 1;
-    request->sent_to_cache_level_at[request->next_level] = orcs_engine.get_global_cycle();
-    
-
-    if (cache_status == HIT) {
-        #if MEMORY_DEBUG 
-            ORCS_PRINTF (" HIT!\n");
-        #endif
-
+// Copy a line found at level request->next_level up to the requesting core's
+// upper levels (and apply the write at the L1). Used by an L2/LLC hit and by
+// a waiter released after a merged LLC miss.
+void cache_manager_t::fill_upper_levels(memory_package_t* request, int32_t* cache_indexes) {
         // -----------------------------------------------------------------------------------------
         // Se foi um hit, trata diferente leituras e escritas de instruções
         // -----------------------------------------------------------------------------------------
@@ -1016,6 +1056,42 @@ cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t
                 ERROR_ASSERT_PRINTF (true, "WRONG MEMORY OPERATION TYPE")
             break;
         }
+
+}
+
+cache_status_t cache_manager_t::cache_search (memory_package_t* request, cache_t* cache, int32_t* cache_indexes){
+    #if PROCESSOR_DEBUG
+        ORCS_PRINTF ("%lu Cache Manager cache_search(): memory = %lu | level = %u, type = %s, count = %u -> count = %u, %s, %lu\n", orcs_engine.get_global_cycle(), requests.size(), request->next_level, get_enum_cache_type_char ((cacheId_t) cache->id), cache->get_concurrent_cache_accesses(), cache->get_concurrent_cache_accesses()+1, get_enum_memory_operation_char (request->memory_operation), request->memory_address)
+    #endif
+
+    // -----------------------------------------------------------------------------------------
+    // Verifica se está no nível da cache (next_level)
+    // -----------------------------------------------------------------------------------------
+
+    uint32_t cache_status = 0, ttc = 0;
+    cache_status = this->searchAddress(request->memory_address, cache, &request->cache_latency, &ttc);
+
+    // -----------------------------------------------------------------------------------------
+    // Will retry later
+    if (cache_status == MSHR_STALL) {
+        return MSHR_STALL;
+    }
+
+    cache->cache_count_per_type[stat_operation(request, cache->level)]++;
+
+    // -----------------------------------------------------------------------------------------
+    // Marca que foi enviado ao nível next_level e em que ciclo isso aconteceu.
+    // -----------------------------------------------------------------------------------------
+    request->sent_to_cache_level[request->next_level] = 1;
+    request->sent_to_cache_level_at[request->next_level] = orcs_engine.get_global_cycle();
+    
+
+    if (cache_status == HIT) {
+        #if MEMORY_DEBUG 
+            ORCS_PRINTF (" HIT!\n");
+        #endif
+
+        this->fill_upper_levels(request, cache_indexes);
 
         request->updatePackageWait(ttc);
         request->next_level++;
@@ -1303,4 +1379,12 @@ void cache_manager_t::check_consistency() {
     }
     ORCS_PRINTF("CACHE_CHECK: %lu valid lines, %lu bad pointers, %lu upper-level lines not in the LLC (%s LLC)\n",
                 lines, bad_pointers, not_in_llc, inclusive ? "inclusive" : "non-inclusive, not checked")
+
+    /// Every MSHR entry must have been freed by the end of the run
+    int64_t mshr_left = 0;
+    for (uint32_t lv = 0; lv < INSTRUCTION_LEVELS; lv++)
+        for (uint32_t j = 0; j < ICACHE_AMOUNT[lv]; j++) mshr_left += this->instruction_cache[lv][j].mshr_occupied_entries;
+    for (uint32_t lv = 0; lv < DATA_LEVELS; lv++)
+        for (uint32_t j = 0; j < DCACHE_AMOUNT[lv]; j++) mshr_left += this->data_cache[lv][j].mshr_occupied_entries;
+    ORCS_PRINTF("CACHE_CHECK: %ld MSHR entries still occupied\n", mshr_left)
 }

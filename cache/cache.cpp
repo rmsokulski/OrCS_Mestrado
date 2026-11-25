@@ -21,6 +21,7 @@ cache_t::cache_t() {
     this->cache_back_invalidation = 0;
     this->cache_write_merged = 0;
     this->cache_write_merged_missing = 0;
+    this->cache_merged_miss = 0;
     this->inclusive = true;
 	this->is_inst_cache = false;
 
@@ -491,6 +492,7 @@ void cache_t::statistics(FILE *output) {
 		fprintf(output, "%d_Cache_Eviction:     %lu\n", this->level, this->get_cache_eviction());
 		fprintf(output, "%d_Cache_Back_Invalidation: %lu\n", this->level, this->get_cache_back_invalidation());
 		if (this->get_cache_write_merged() != 0) fprintf(output, "%d_Cache_Write_Merged: %lu\n", this->level, this->get_cache_write_merged());
+		if (this->get_cache_merged_miss() != 0) fprintf(output, "%d_Cache_Merged_Miss:  %lu\n", this->level, this->get_cache_merged_miss());
 		if (this->get_cache_write_merged_missing() != 0) fprintf(output, "%d_Cache_Write_Merged_Missing: %lu\n", this->level, this->get_cache_write_merged_missing());
 		fprintf(output, "%d_Cache_Read:         %lu\n", this->level, this->cache_count_per_type[MEMORY_OPERATION_READ]);
 		if (this->cache_hit_per_type[MEMORY_OPERATION_READ] != 0) fprintf(output, "%d_Cache_Read_Hit:     %lu\n", this->level, this->cache_hit_per_type[MEMORY_OPERATION_READ]);
@@ -528,6 +530,7 @@ void cache_t::reset_statistics() {
 	this->set_cache_back_invalidation(0);
 	this->set_cache_write_merged(0);
 	this->set_cache_write_merged_missing(0);
+	this->set_cache_merged_miss(0);
 	for (int32_t i = 0; i < MEMORY_OPERATION_LAST; i++){
 		this->cache_count_per_type[i] = 0;
 		this->cache_hit_per_type[i] = 0;

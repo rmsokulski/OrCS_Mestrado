@@ -61,6 +61,10 @@ class cache_manager_t {
         void check_cache(uint32_t cache_size, uint32_t cache_level);
         void print_requests();
         bool isIn (memory_package_t* subrequest, memory_package_t* request);
+        bool merge_at_llc (memory_package_t* request);
+        void count_llc_secondary_miss (cache_t* llc, memory_package_t* request);
+        void release_llc_waiters (memory_package_t* owner);
+        void fill_upper_levels (memory_package_t* request, int32_t* cache_indexes);
         void installCacheLines(memory_package_t* request, int32_t *cache_indexes, uint32_t latency_request, cacheId_t cache_type);
         uint32_t searchAddress(uint64_t instructionAddress, cache_t *cache, uint32_t *latency_request, uint32_t *ttc);
         cache_status_t recursiveInstructionSearch(memory_package_t *mob_line, int32_t *cache_indexes, uint32_t latency_request, uint32_t ttc, uint32_t cache_level);
