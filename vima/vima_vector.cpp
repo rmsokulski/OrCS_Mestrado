@@ -3,6 +3,7 @@
 
 vima_vector_t::vima_vector_t(){
     this->no_sub_requests = 0;
+    this->active_requests = 0;
     this->sub_ready = 0;
     this->address = 0;
     this->next_address = 0;
@@ -16,7 +17,6 @@ vima_vector_t::vima_vector_t(){
     this->tag = 0;
     this->lru = 0;
     this->dirty = false;
-    this->gather = false;
     this->scatter = false;
     this->pending_result = false;
 
@@ -40,33 +40,37 @@ void vima_vector_t::fetch (bool random) {
     if (this->next_address != 0){
         this->address = this->next_address;
         //this->next_address = 0;
-        if (sub_ready == no_sub_requests){
-            //this->set_no_sub_requests (requests);
+        if (sub_ready == active_requests){
+            /// A gather reads its distinct lines; any other vector its 8 KB
+            this->active_requests = this->gather_lines ? this->gather_lines->size() : no_sub_requests;
+            ERROR_ASSERT_PRINTF (this->active_requests > 0 && this->active_requests <= no_sub_requests * no_sub_requests,
+                                 "VIMA gather with %u lines\n", this->active_requests)
             #if VIMA_DEBUG 
                 ORCS_PRINTF ("%lu VIMA Cache [%lu][%lu] FETCH of address %lu STARTED!\n", orcs_engine.get_global_cycle(), this->set, this->column, this->address)
             #endif
             this->fetch_start = orcs_engine.get_global_cycle();
             this->fetch_count++;
             sub_ready = 0;
-            for (uint32_t i = 0; i < get_no_sub_requests(); i++){
+            for (uint32_t i = 0; i < active_requests; i++){
                 sub_requests[i].memory_operation = MEMORY_OPERATION_READ;
                 sub_requests[i].status = PACKAGE_STATE_UNTREATED;
                 sub_requests[i].sent_to_ram = false;
                 sub_requests[i].row_buffer = false;
-                sub_requests[i].memory_address = address + i*this->get_LINE_SIZE();
+                if (this->gather_lines) sub_requests[i].memory_address = (*this->gather_lines)[i];
+                else sub_requests[i].memory_address = address + i*this->get_LINE_SIZE();
                 if (random) sub_requests[i].memory_address += (rand() % UINT32_MAX);
                 sub_requests[i].born_cycle = orcs_engine.get_global_cycle();
                 orcs_engine.memory_controller->requestDRAM (&sub_requests[i]);
             } 
         } else {
-            while (sub_ready < no_sub_requests && 
+            while (sub_ready < active_requests && 
                 sub_requests[sub_ready].status == PACKAGE_STATE_WAIT && 
                 sub_requests[sub_ready].readyAt <= orcs_engine.get_global_cycle()) {
                     //ORCS_PRINTF ("LOAD : %u/%u sub-requests are ready! addr = %lu\n", sub_ready, get_no_sub_requests(), sub_requests[sub_ready].memory_address);
                     sub_ready++;   
             }
         }
-        if (sub_ready >= no_sub_requests) {
+        if (sub_ready >= active_requests) {
             #if VIMA_DEBUG 
                 ORCS_PRINTF ("%lu VIMA Cache [%lu][%lu] FETCH of address %lu FINISHED! Took %lu cycles.\n", orcs_engine.get_global_cycle(), this->set, this->column, this->address, (orcs_engine.get_global_cycle() - this->fetch_start))
             #endif
@@ -89,14 +93,15 @@ void vima_vector_t::fetch (bool random) {
 
 void vima_vector_t::writeback (bool random) {
     if (dirty) {
-        if (sub_ready == no_sub_requests){
+        if (sub_ready == active_requests){
+            this->active_requests = no_sub_requests;
             #if VIMA_DEBUG 
                 ORCS_PRINTF ("%lu VIMA Cache [%lu][%lu] WRITEBACK of address %lu, lru = %lu STARTED!\n", orcs_engine.get_global_cycle(), this->set, this->column, this->address, this->lru)
             #endif
             this->writeback_start = orcs_engine.get_global_cycle();
             this->writeback_count++;
             sub_ready = 0;
-            for (uint32_t i = 0; i < get_no_sub_requests(); i++){
+            for (uint32_t i = 0; i < active_requests; i++){
                 sub_requests[i].memory_operation = MEMORY_OPERATION_WRITE;
                 sub_requests[i].status = PACKAGE_STATE_UNTREATED;
                 sub_requests[i].sent_to_ram = false;
@@ -107,14 +112,14 @@ void vima_vector_t::writeback (bool random) {
                 orcs_engine.memory_controller->requestDRAM (&sub_requests[i]);
             } 
         } else {
-            while (sub_ready < no_sub_requests && 
+            while (sub_ready < active_requests && 
                 sub_requests[sub_ready].status == PACKAGE_STATE_WAIT && 
                 sub_requests[sub_ready].readyAt <= orcs_engine.get_global_cycle()) {
                     //ORCS_PRINTF ("STORE: %u/%u sub-requests are ready! addr = %lu\n", sub_ready, get_no_sub_requests(), sub_requests[sub_ready].memory_address);
                     sub_ready++;
             }
         }
-    if (sub_ready >= no_sub_requests) {
+    if (sub_ready >= active_requests) {
         #if VIMA_DEBUG 
             ORCS_PRINTF ("%lu VIMA Cache [%lu][%lu] WRITEBACK of address %lu FINISHED! Took %lu cycles.\n", orcs_engine.get_global_cycle(), this->set, this->column, this->address, (orcs_engine.get_global_cycle() - this->writeback_start))
         #endif
@@ -144,6 +149,7 @@ void vima_vector_t::finish_writeback() {
 /// keeps it dirty until eviction, when writeback() sends it to DRAM. If the line
 /// still holds a different dirty vector, that one is written back first.
 void vima_vector_t::install_result (uint64_t result_address) {
+    this->gather_lines.reset();
     this->next_address = result_address;
     if (this->dirty && this->address != result_address) {
         this->pending_result = true;
@@ -159,7 +165,7 @@ void vima_vector_t::install_result (uint64_t result_address) {
 /// A fetch or writeback is in flight (its sub-requests are in use), or a result
 /// waits for the old vector's writeback, which may not have started yet
 bool vima_vector_t::busy() {
-    return this->pending_result || this->sub_ready < this->no_sub_requests;
+    return this->pending_result || this->sub_ready < this->active_requests;
 }
 
 /// The vector this line holds, or is fetching / about to hold
@@ -175,15 +181,14 @@ void vima_vector_t::clock() {
             else this->writeback(false);
             break;
         case PACKAGE_STATE_WAIT: 
-            if (this->gather) this->fetch (true);
-            else this->fetch (false);
+            this->fetch (false);
             break;
         default: break;
     }
 }
 
 bool vima_vector_t::ready(){
-    if (sub_ready >= no_sub_requests && status == PACKAGE_STATE_READY) return true;
+    if (sub_ready >= active_requests && status == PACKAGE_STATE_READY) return true;
     else return false;
 }
 
@@ -197,7 +202,8 @@ void vima_vector_t::allocate() {
 
     this->sub_requests = new memory_package_t[this->no_sub_requests * this->no_sub_requests]();
 
-    for (size_t i = 0; i < get_no_sub_requests(); i++) {
+    /// A gather may read up to one line per element: more than no_sub_requests
+    for (size_t i = 0; i < (size_t) this->no_sub_requests * this->no_sub_requests; i++) {
         sub_requests[i].is_vima = true;
         sub_requests[i].status = PACKAGE_STATE_FREE;
         // requestDRAM() splits by memory_size; size 0 on an aligned address
@@ -207,6 +213,7 @@ void vima_vector_t::allocate() {
 
     users = 0;
     status = PACKAGE_STATE_FREE;
+    active_requests = no_sub_requests;
     sub_ready = no_sub_requests;
     sub_req_offset = utils_t::get_power_of_two(LINE_SIZE);
 }

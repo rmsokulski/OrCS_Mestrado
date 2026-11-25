@@ -39,6 +39,9 @@ class opcode_package_t : public memory_request_client_t {
         int32_t hive_write = -1;
 
         bool is_vima;
+        #ifndef __PIN__
+        vima_lines_t gather_lines;   /// VIMA gather: the lines it reads (empty otherwise)
+        #endif
 
         /// SYNC_NONE for a real instruction; otherwise this package only
         /// carries a sync marker and is not an instruction.

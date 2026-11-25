@@ -72,6 +72,7 @@ void opcode_package_t::package_clean() {
     this->hive_read1 = 0;
     this->hive_read2 = 0;
     this->hive_write = 0;
+    this->gather_lines.reset();
 
     this->sync_type = SYNC_NONE;
 

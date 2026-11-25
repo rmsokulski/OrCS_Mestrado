@@ -1711,6 +1711,7 @@ void processor_t::decode()
 				new_uop.read_address = (instr->num_reads > 0) ? instr->reads_addr[0] : 0;
 				new_uop.read2_address = (instr->num_reads > 1) ? instr->reads_addr[1] : 0;
 				new_uop.write_address = (instr->num_writes > 0) ? instr->writes_addr[0] : 0;
+				new_uop.gather_lines = instr->gather_lines;
 
 				new_uop.updatePackageWait(DECODE_LATENCY);
 				new_uop.born_cycle = orcs_engine.get_global_cycle();
@@ -2903,6 +2904,7 @@ void processor_t::rename()
 			rob_line->mob_base[pos_mob].vima_read1 = rob_line->uop.read_address;
 			rob_line->mob_base[pos_mob].vima_read2 = rob_line->uop.read2_address;
 			rob_line->mob_base[pos_mob].vima_write = rob_line->uop.write_address;
+			rob_line->mob_base[pos_mob].gather_lines = rob_line->uop.gather_lines;
 			rob_line->mob_base[pos_mob].opcode_address = rob_line->uop.opcode_address;
 			rob_line->mob_base[pos_mob].memory_size = rob_line->uop.memory_size[0];
 
@@ -3796,6 +3798,7 @@ uint32_t processor_t::mob_vima()
 		request->vima_read1 = oldest_vima_to_send->vima_read1;
 		request->vima_read2 = oldest_vima_to_send->vima_read2;
 		request->vima_write = oldest_vima_to_send->vima_write;
+		request->gather_lines = oldest_vima_to_send->gather_lines;
 		request->readyAt = orcs_engine.get_global_cycle();
 		request->born_cycle = orcs_engine.get_global_cycle();
 		request->type = DATA;

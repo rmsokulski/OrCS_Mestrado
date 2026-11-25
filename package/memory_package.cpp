@@ -31,6 +31,7 @@ memory_package_t::memory_package_t() {
     this->vima_read2_vec = NULL;
     this->vima_write = 0;
     this->vima_write_vec = NULL;
+    this->gather_lines.reset();
 
     this->is_vectorial_part = -1;
     this->is_prefetch = false;
@@ -213,6 +214,7 @@ void memory_package_t::package_clean() {
     this->vima_read2_vec = NULL;
     this->vima_write = 0;
     this->vima_write_vec = NULL;
+    this->gather_lines.reset();
 
     this->is_vectorial_part = -1;
     this->is_prefetch = false;
@@ -269,6 +271,7 @@ void memory_package_t::copy(memory_package_t *other) {
     this->vima_read2_vec = other->vima_read2_vec;
     this->vima_write     = other->vima_write;
     this->vima_write_vec = other->vima_write_vec;
+    this->gather_lines   = other->gather_lines;
 
     this->is_vectorial_part = other->is_vectorial_part;
 

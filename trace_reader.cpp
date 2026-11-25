@@ -10,6 +10,10 @@ trace_reader_t::trace_reader_t() {
     this->gzDynamicTraceFile = NULL;
     this->gzMemoryTraceFile = NULL;
 
+    this->memory_pushback[0] = '\0';
+    this->has_memory_pushback = false;
+    this->gathers_without_lines = 0;
+
     /// Control the trace reading
     this->is_inside_bbl=NULL;
     this->currect_bbl=0;
@@ -450,23 +454,10 @@ bool trace_reader_t::trace_next_memory(uint64_t *mem_address, uint32_t *mem_size
     bool valid_memory = false;
 
     while (!valid_memory) {
-        /// Obtain the next trace line
-        if (gzeof(this->gzMemoryTraceFile)) {
+        if (!this->next_memory_line(file_line)) {
             return FAIL;
         }
-        char *buffer = gzgets(this->gzMemoryTraceFile, file_line, TRACE_LINE_SIZE);
-        if (buffer == NULL) {
-            return FAIL;
-        }
-
-        //ORCS_PRINTF ("processor %lu | %s", processor_id, file_line)
-
-        /// Analyze the trace line
-        if (file_line[0] == '\0' || file_line[0] == '#') {
-            DEBUG_PRINTF("Memory trace line (empty/comment): %s\n", file_line);
-            continue;
-        }
-        else {
+        {
             char *sub_string = NULL;
             char *tmp_ptr = NULL;
             uint32_t count = 0, i = 0;
@@ -831,6 +822,10 @@ bool trace_reader_t::trace_fetch(opcode_package_t *m) {
     m->num_reads = num_reads;
     m->num_writes = num_writes;
 
+    if (m->opcode_operation == INSTRUCTION_OPERATION_VIMA_GATHER) {
+        this->trace_next_gather(m);
+    }
+
 
     //if (m->is_read || m->is_read2 || m->is_write) ORCS_PRINTF (" operation = %s \n", get_enum_instruction_operation_char (m->opcode_operation))
 
@@ -838,29 +833,74 @@ bool trace_reader_t::trace_fetch(opcode_package_t *m) {
     return OK;
 }
 // =====================================================================
+/// Next non-comment line of the memory trace, the pushed-back one first.
+bool trace_reader_t::next_memory_line(char *file_line) {
+    if (this->has_memory_pushback) {
+        this->has_memory_pushback = false;
+        strncpy(file_line, this->memory_pushback, TRACE_LINE_SIZE);
+        return OK;
+    }
+    while (true) {
+        if (gzeof(this->gzMemoryTraceFile)) {
+            return FAIL;
+        }
+        if (gzgets(this->gzMemoryTraceFile, file_line, TRACE_LINE_SIZE) == NULL) {
+            return FAIL;
+        }
+        if (file_line[0] == '\0' || file_line[0] == '#') {
+            DEBUG_PRINTF("Memory trace line (empty/comment): %s\n", file_line);
+            continue;
+        }
+        return OK;
+    }
+}
+
+// =====================================================================
+/// VIMA gather address block, written by the tracer after the gather's
+/// R/R/W lines:
+///     G <count>
+///     <line address>      (count lines: distinct 64 B lines, sorted)
+/// Traces made before this block existed have none: the gather then keeps
+/// an empty list and the controller fetches 8 KB from the base (old model).
+void trace_reader_t::trace_next_gather(opcode_package_t *m) {
+    static char file_line[TRACE_LINE_SIZE];
+    m->gather_lines.reset();
+
+    if (!this->next_memory_line(file_line)) {
+        this->gathers_without_lines++;
+        return;
+    }
+    if (file_line[0] != 'G') {
+        strncpy(this->memory_pushback, file_line, TRACE_LINE_SIZE);
+        this->has_memory_pushback = true;
+        if (this->gathers_without_lines++ == 0) {
+            ORCS_PRINTF("WARNING: VIMA gather without a gather address block (old trace): fetching 8 KB from the base instead.\n")
+        }
+        return;
+    }
+
+    uint32_t count = strtoul(file_line + 1, NULL, 10);
+    std::vector<uint64_t> *lines = new std::vector<uint64_t>();
+    lines->reserve(count);
+    for (uint32_t i = 0; i < count; i++) {
+        bool ok = this->next_memory_line(file_line);
+        ERROR_ASSERT_PRINTF(ok, "Memory trace ended inside a VIMA gather block (%u of %u lines)\n", i, count);
+        lines->push_back(strtoull(file_line, NULL, 10) | this->address_translation);
+    }
+    m->gather_lines = vima_lines_t(lines);
+}
+
+// =====================================================================
 uint32_t trace_reader_t::trace_next_num_accesses() {
     static char file_line[TRACE_LINE_SIZE];
     file_line[0] = '\0';
 
 
     while (true) {
-        /// Obtain the next trace line
-        if (gzeof(this->gzMemoryTraceFile)) {
+        if (!this->next_memory_line(file_line)) {
             return FAIL;
         }
-        char *buffer = gzgets(this->gzMemoryTraceFile, file_line, TRACE_LINE_SIZE);
-        if (buffer == NULL) {
-            return FAIL;
-        }
-
-        //ORCS_PRINTF ("processor %lu | %s", processor_id, file_line)
-
-        /// Analyze the trace line
-        if (file_line[0] == '\0' || file_line[0] == '#') {
-            DEBUG_PRINTF("Memory trace line (empty/comment): %s\n", file_line);
-            continue;
-        }
-        else {
+        {
             ERROR_ASSERT_PRINTF(file_line[0] == '$', "Error searching for num accesses in line %s\n", file_line);
 
             uint32_t num_accesses = (uint32_t)strtoul(file_line + 1, NULL, 10);
@@ -878,6 +918,7 @@ void trace_reader_t::statistics(FILE *output) {
         utils_t::largestSeparator(output);
         fprintf(output,"trace_reader_t\n");
         fprintf(output,"fetch_instructions: %lu\n", this->fetch_instructions);
+        if (this->gathers_without_lines > 0) fprintf(output,"vima_gathers_without_lines: %lu\n", this->gathers_without_lines);
 
         utils_t::largestSeparator(output);
     }

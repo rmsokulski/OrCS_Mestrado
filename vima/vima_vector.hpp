@@ -2,6 +2,7 @@ class vima_vector_t {
     private:
         memory_package_t* sub_requests;
         uint32_t no_sub_requests;
+        uint32_t active_requests;   /// sub-requests of the transfer in flight (no_sub_requests, or a gather's line count)
         uint32_t sub_ready;
         uint64_t address;
         uint64_t next_address;
@@ -16,7 +17,7 @@ class vima_vector_t {
         package_state_t status;
         uint64_t tag;
         uint64_t lru;
-        bool gather;
+        vima_lines_t gather_lines;  /// Set while the line holds gathered data: never matched by address
         bool scatter;
         bool dirty;
         uint32_t users;     /// VIMA instructions holding this line (sources and destination); evictable only at 0
@@ -42,6 +43,7 @@ class vima_vector_t {
         void finish_writeback();
         bool busy();
         uint64_t held_address();
+        bool is_gathered() { return (bool) this->gather_lines; }
 
         INSTANTIATE_GET_SET_ADD (uint32_t,no_sub_requests)
         INSTANTIATE_GET_SET_ADD (uint64_t,address)

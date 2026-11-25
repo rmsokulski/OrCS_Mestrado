@@ -28,6 +28,7 @@ class uop_package_t{
     int32_t hive_write;
 
     bool is_vima;
+    vima_lines_t gather_lines;   /// VIMA gather: the lines it reads (empty otherwise)
 
     uint32_t latency;
     uint32_t throughput;

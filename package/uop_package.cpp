@@ -17,6 +17,7 @@ void uop_package_t::package_clean()
     this->hive_write = -1;
 
     this->is_vima = false;
+    this->gather_lines.reset();
     
 
     memset(this->read_regs, POSITION_FAIL, sizeof(int32_t) * MAX_REGISTERS);

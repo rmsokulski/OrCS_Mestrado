@@ -25,6 +25,15 @@ class trace_reader_t {
         char *line_static;
         char **line_dynamic;
         char **line_memory;
+
+        /// One memory-trace line read ahead and not consumed (the line after a
+        /// VIMA gather in traces without a gather address block)
+        char memory_pushback[TRACE_LINE_SIZE];
+        bool has_memory_pushback;
+        uint64_t gathers_without_lines;   /// gathers in old traces (no G block)
+
+        bool next_memory_line(char *file_line);
+        void trace_next_gather(opcode_package_t *m);
     public:
         uint64_t processor_id;
         uint64_t address_translation;

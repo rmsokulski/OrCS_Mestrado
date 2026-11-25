@@ -31,6 +31,11 @@
 #include <cassert>
 #include <libconfig.h++>
 #include <unordered_map>
+#include <memory>
+
+/// Distinct 64 B line addresses touched by a VIMA gather, shared (never copied)
+/// from the trace reader to the VIMA vector that fetches them.
+typedef std::shared_ptr<const std::vector<uint64_t> > vima_lines_t;
 
 // ============================================================================
 /// Classes

@@ -15,6 +15,7 @@ class memory_order_buffer_line_t : public memory_request_client_t {
         uint64_t vima_read1;
         uint64_t vima_read2;
         uint64_t vima_write;
+        vima_lines_t gather_lines;  /// VIMA gather: the lines it reads (empty otherwise)
          
         reorder_buffer_line_t* rob_ptr;                 /// rob pointer
         /// Memory Dependencies Control

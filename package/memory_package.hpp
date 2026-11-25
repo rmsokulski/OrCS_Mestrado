@@ -31,6 +31,7 @@ class memory_package_t {
         vima_vector_t* vima_read2_vec;
         uint64_t vima_write;
         vima_vector_t* vima_write_vec;
+        vima_lines_t gather_lines;              /// VIMA gather: the lines it reads (empty otherwise)
         int32_t is_vectorial_part;
 
         bool row_buffer;

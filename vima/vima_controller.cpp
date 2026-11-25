@@ -121,7 +121,9 @@ void vima_controller_t::instruction_ready (size_t index){
     vima_buffer_count--;
 }
 
-vima_vector_t* vima_controller_t::search_cache (uint64_t address, cache_status_t* result){
+/// match = false: only find a victim (a gather's source, whose data is not the
+/// contiguous vector at its base). Lines holding gathered data never match.
+vima_vector_t* vima_controller_t::search_cache (uint64_t address, cache_status_t* result, bool match){
     vima_vector_t* ret = NULL;
     uint64_t lru_cycle = UINT64_MAX;
     int32_t lru_way = -1;
@@ -129,7 +131,7 @@ vima_vector_t* vima_controller_t::search_cache (uint64_t address, cache_status_t
     if (VIMA_CACHE_ASSOCIATIVITY == 1){
         index = get_index (address);
         for (uint32_t i = 0; i < get_lines(); i++){
-            if (get_index(cache[i][0].held_address()) == get_index (address) && get_tag(cache[i][0].held_address()) == get_tag (address)) {   /// Held or being fetched / installed
+            if (match && !cache[i][0].is_gathered() && get_index(cache[i][0].held_address()) == get_index (address) && get_tag(cache[i][0].held_address()) == get_tag (address)) {   /// Held or being fetched / installed
                 *result = HIT;
                 #if VIMA_DEBUG 
                     ORCS_PRINTF ("%lu VIMA Cache HIT! address %lu, tag = %lu, index = %lu.\n", orcs_engine.get_global_cycle(), address, get_tag (address), get_index (address))
@@ -144,7 +146,7 @@ vima_vector_t* vima_controller_t::search_cache (uint64_t address, cache_status_t
     } else {
         index = get_index (address);
         for (i = 0; i < VIMA_CACHE_ASSOCIATIVITY; i++){
-            if (get_tag(cache[index][i].held_address()) == get_tag (address)) {
+            if (match && !cache[index][i].is_gathered() && get_tag(cache[index][i].held_address()) == get_tag (address)) {
                 *result = HIT;
                 #if VIMA_DEBUG 
                     ORCS_PRINTF ("%lu VIMA Cache HIT! address %lu, tag = %lu, index = %lu.\n", orcs_engine.get_global_cycle(), address, get_tag (address), get_index (address))
@@ -246,8 +248,8 @@ bool vima_controller_t::can_enter (int index){
 }
 
 /// Finds the line of a vector (hit) or a victim for it (miss) and takes it
-vima_vector_t* vima_controller_t::acquire_line (uint64_t address, cache_status_t* result){
-    vima_vector_t* line = search_cache (address, result);
+vima_vector_t* vima_controller_t::acquire_line (uint64_t address, cache_status_t* result, bool match){
+    vima_vector_t* line = search_cache (address, result, match);
     ERROR_ASSERT_PRINTF (line != NULL, "VIMA instruction admitted without a free cache line")
     line->users++;
     this->current_cache_access_latency += this->get_VIMA_CACHE_LATENCY();
@@ -307,11 +309,15 @@ void vima_controller_t::clock(){
 
                 if (instruction->vima_read1 != 0) {
                     cache_status_t result = MISS;
-                    instruction->vima_read1_vec = this->acquire_line (instruction->vima_read1, &result);
+                    /// A gather's source is never in the cache: it takes a fresh line and
+                    /// reads the gathered lines (or, in old traces, 8 KB from the base)
+                    bool is_gather = instruction->memory_operation == MEMORY_OPERATION_VIMA_GATHER;
+                    instruction->vima_read1_vec = this->acquire_line (instruction->vima_read1, &result, !is_gather);
                     this->add_cache_accesses();
                     this->add_cache_reads();
 
-                    if (instruction->memory_operation == MEMORY_OPERATION_VIMA_GATHER) result = MISS;
+                    if (is_gather) result = MISS;
+                    if (result == MISS) instruction->vima_read1_vec->gather_lines = is_gather ? instruction->gather_lines : vima_lines_t();
 
                     if (result == MISS) {
                         this->add_cache_misses();
@@ -331,6 +337,7 @@ void vima_controller_t::clock(){
 
                     if (result == MISS) {
                         this->add_cache_misses();
+                        instruction->vima_read2_vec->gather_lines.reset();
                         if (instruction->vima_read2_vec->dirty){
                             this->add_cache_writebacks();
                             instruction->vima_read2_vec->status = PACKAGE_STATE_TRANSMIT;
