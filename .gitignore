@@ -48,3 +48,6 @@ trace_generator/noclone3
 
 # Compiler-generated header dependencies
 *.d
+
+# Extracted scan kernels: build outputs
+trace_generator/kernels/Extracted/build/
