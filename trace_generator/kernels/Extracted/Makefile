@@ -1,4 +1,4 @@
-# Builds the traceable scan_main (all 16 versions in one binary).
+# Builds the traceable scan_main (all 20 versions in one binary).
 #   make            -> build/scan_main.trace
 # -static: Pin 3.11 aborts on the .relr.dyn section of glibc >= 2.36's ld.so.
 # -g: symbols for the ORCS_tracing_start/stop markers.
@@ -9,7 +9,7 @@ CFLAGS  ?= -std=c11 -O2 -g -Wall -Wextra -fopenmp -static
 AVX512  := -mavx512f -mavx512vl -mavx512dq
 OBJ     := build/trace
 
-PLAIN := $(wildcard Scalar/scan_*.c Parallel/scan_*.c)
+PLAIN := $(wildcard Scalar/scan_*.c Parallel/scan_*.c VIMA/scan_*.c VIMA/vima_isa.c)
 SIMD  := $(wildcard SIMD/scan_*.c SIMD_Parallel/scan_*.c)
 OBJS  := $(addprefix $(OBJ)/,$(notdir $(PLAIN:.c=.o) $(SIMD:.c=.o)))
 
@@ -20,6 +20,7 @@ build/scan_main.trace: scan_main.c orcs_tracing_c.h $(OBJS)
 
 $(OBJ)/%.o: Scalar/%.c   | $(OBJ) ; $(CC) $(CFLAGS) -c $< -o $@
 $(OBJ)/%.o: Parallel/%.c | $(OBJ) ; $(CC) $(CFLAGS) -c $< -o $@
+$(OBJ)/%.o: VIMA/%.c     | $(OBJ) ; $(CC) $(CFLAGS) -c $< -o $@
 $(OBJ)/%.o: SIMD/%.c          | $(OBJ) ; $(CC) $(CFLAGS) $(AVX512) -c $< -o $@
 $(OBJ)/%.o: SIMD_Parallel/%.c | $(OBJ) ; $(CC) $(CFLAGS) $(AVX512) -c $< -o $@
 

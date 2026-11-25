@@ -2,7 +2,7 @@
 # =========================================================================================
 # Generates OrCS x86 traces of the scan versions with sinuca_tracer.
 #
-#   ./trace.sh                  traces all 16 versions
+#   ./trace.sh                  traces all 20 versions
 #   ./trace.sh <version> ...    traces the given versions (see: build/scan_main.trace list)
 #
 # Env:
@@ -12,6 +12,7 @@
 #
 # Traces go to $TRACE_DIR/scan/<version>/<version>.*  — only the scan call is traced.
 # simd* versions are skipped on hosts without AVX-512 (trace them on another machine).
+# vima* versions are traced with -trace iVIM (VIMA instructions); the others with -trace x86.
 # =========================================================================================
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -41,9 +42,10 @@ for v in "${VERSIONS[@]}"; do
         echo "$v: skipped (needs an AVX-512 host)"; continue
     fi
     [[ $v == parallel* || $v == simd_parallel* ]] && t=$THREADS || t=1
+    [[ $v == vima* ]] && kind=iVIM || kind=x86
     dir=$OUT/$v; mkdir -p "$dir"
     echo "== $v ($t thread(s)) -> $dir"
-    OMP_NUM_THREADS=$t "$NOCLONE3" "$PIN" -t "$TOOL" -trace x86 -orcs_tracing 1 -threads "$t" \
+    OMP_NUM_THREADS=$t "$NOCLONE3" "$PIN" -t "$TOOL" -trace "$kind" -orcs_tracing 1 -threads "$t" \
         -output "$dir/$v" -- "$BIN" "$v" \
         "$INPUT/data.txt" "$INPUT/predicates.txt" "$INPUT/partitions.txt" "$INPUT/skip.txt" \
         "$dir/result.txt"

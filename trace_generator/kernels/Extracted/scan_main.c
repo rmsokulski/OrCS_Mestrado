@@ -25,6 +25,8 @@ double scan_bitmap_reeval_simd(SCAN_ARGS);     double scan_bitmap_skip_simd(SCAN
 double scan_selvec_reeval_simd(SCAN_ARGS);     double scan_selvec_skip_simd(SCAN_ARGS);
 double scan_bitmap_reeval_simd_par(SCAN_ARGS); double scan_bitmap_skip_simd_par(SCAN_ARGS);
 double scan_selvec_reeval_simd_par(SCAN_ARGS); double scan_selvec_skip_simd_par(SCAN_ARGS);
+double scan_bitmap_reeval_vima(SCAN_ARGS);     double scan_bitmap_skip_vima(SCAN_ARGS);
+double scan_selvec_reeval_vima(SCAN_ARGS);     double scan_selvec_skip_vima(SCAN_ARGS);
 
 typedef struct { const char *name; scan_fn function; bool needs_avx512; } Version;
 
@@ -45,6 +47,10 @@ static const Version versions[] = {
     { "simd_parallel_bitmap_skip",   scan_bitmap_skip_simd_par,   true  },
     { "simd_parallel_selvec_reeval", scan_selvec_reeval_simd_par, true  },
     { "simd_parallel_selvec_skip",   scan_selvec_skip_simd_par,   true  },
+    { "vima_bitmap_reeval",          scan_bitmap_reeval_vima,     false },
+    { "vima_bitmap_skip",            scan_bitmap_skip_vima,       false },
+    { "vima_selvec_reeval",          scan_selvec_reeval_vima,     false },
+    { "vima_selvec_skip",            scan_selvec_skip_vima,       false },
 };
 #define VERSION_COUNT (sizeof(versions) / sizeof(versions[0]))
 

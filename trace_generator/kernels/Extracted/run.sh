@@ -2,7 +2,7 @@
 # =========================================================================================
 # Builds scan_main and runs it on the example input.
 #
-#   ./run.sh                  runs all 16 versions
+#   ./run.sh                  runs all 20 versions
 #   ./run.sh <version>        runs one version (see: ./build/scan_main list)
 #
 # AVX-512 versions: if this CPU lacks AVX-512, set SDE to the sde64 binary
@@ -23,13 +23,13 @@ AVX512="-mavx512f -mavx512vl -mavx512dq"
 # Only the SIMD folders get AVX-512 flags, so the other versions never execute
 # AVX-512 instructions (the compiler could otherwise auto-vectorize them with it).
 mkdir -p "$BUILD"
-for f in Scalar/scan_*.c Parallel/scan_*.c; do
+for f in Scalar/scan_*.c Parallel/scan_*.c VIMA/scan_*.c VIMA/vima_isa.c; do
     gcc $CFLAGS -c "$f" -o "$BUILD/$(basename "${f%.c}").o"
 done
 for f in SIMD/scan_*.c SIMD_Parallel/scan_*.c; do
     gcc $CFLAGS $AVX512 -c "$f" -o "$BUILD/$(basename "${f%.c}").o"
 done
-gcc $CFLAGS scan_main.c "$BUILD"/scan_*.o -o "$BUILD/scan_main"
+gcc $CFLAGS scan_main.c "$BUILD"/scan_*.o "$BUILD"/vima_isa.o -o "$BUILD/scan_main"
 
 # -----------------------------------------------------------------------------------------
 # Decides how AVX-512 versions are launched

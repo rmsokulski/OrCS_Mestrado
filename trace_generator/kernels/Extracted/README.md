@@ -1,17 +1,17 @@
 # Scan versions — input files
 
-`scan_main` runs one of 16 scan versions over 4 input files and writes the result to a 5th file.
+`scan_main` runs one of 20 scan versions over 4 input files and writes the result to a 5th file.
 
 ```
 build/scan_main <version> <data> <predicates> <partitions> <skip> <output>
-build/scan_main list        # prints the 16 version names
+build/scan_main list        # prints the 20 version names
 ```
 
 Versions are named `<implementation>_<storage>_<evaluation>`:
 
 | Part | Values |
 |---|---|
-| implementation | `scalar`, `parallel` (OpenMP), `simd` (AVX-512), `simd_parallel` (AVX-512 + OpenMP) |
+| implementation | `scalar`, `parallel` (OpenMP), `simd` (AVX-512), `simd_parallel` (AVX-512 + OpenMP), `vima` (VIMA, current ISA; see `VIMA/vima_common.h`) |
 | storage | `bitmap` or `selvec` (selection vector) |
 | evaluation | `reeval` (tests every predicate) or `skip` (uses the skip file) |
 
@@ -110,7 +110,7 @@ data.txt ──── <columns> ───┬── predicates.txt  (column index
 ## Running
 
 ```
-./run.sh                    # build + run all 16 versions on example/
+./run.sh                    # build + run all 20 versions on example/
 ./run.sh simd_bitmap_skip   # one version
 SDE=/path/to/sde64 ./run.sh # AVX-512 versions on a CPU without AVX-512
 OMP_NUM_THREADS=4 ./run.sh  # thread count for the parallel versions
