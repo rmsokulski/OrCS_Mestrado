@@ -25,15 +25,21 @@ After the fixes below, the four VIMA scans finish (100k-row input): 2.8–4.1 M 
 ## 2. Open: slowness
 
 - [ ] **8 KB fetches are serialized.** An isolated vector fetch takes about 5,100 cycles, about 40 cycles per 64 B line, as if all 128 lines go to one channel and bank. DRAM traffic is uneven too: in region 2, channels 1 and 3 served 3,100 and 3,800 lines, channels 0 and 2 about 800 each. Check the DRAM address mapping (`BANK_ROW_BUFFER_SIZE = 8192` equals the vector size) and how `requestDRAM` queues a vector's sub-requests. May be intended hardware behaviour; decide before changing.
-- [ ] **Destinations are fetched before being overwritten.** At completion the destination line is set to WAIT (or TRANSMIT if dirty), so it fetches the old 8 KB from DRAM even when the instruction writes every element, and even on a hit. `check_completion()` has the "dirty → TRANSMIT, else WAIT" block twice in the old code; the second one applied on every path.
-- [ ] **Writebacks to address 0.** Lines never filled are written back with `address = 0`: `set_next_address` changes `next_address`, but `writeback()` uses `address`, which is only set by `fetch()`. Each costs 5,000–10,000 cycles of DRAM traffic. Seen as `WRITEBACK of address 0` in the `VIMA_DEBUG` traces.
+- [x] **Destinations are fetched before being overwritten.** Fixed in 2ff41c6 (with the next two items): the result is installed without a fetch.
+
+  Original finding: At completion the destination line is set to WAIT (or TRANSMIT if dirty), so it fetches the old 8 KB from DRAM even when the instruction writes every element, and even on a hit. `check_completion()` has the "dirty → TRANSMIT, else WAIT" block twice in the old code; the second one applied on every path.
+- [x] **Writebacks to address 0.** Gone after 2ff41c6: a line becomes dirty only once it holds a vector (0 of 50 writebacks in regions 2 and 3).
+
+  Original finding: Lines never filled are written back with `address = 0`: `set_next_address` changes `next_address`, but `writeback()` uses `address`, which is only set by `fetch()`. Each costs 5,000–10,000 cycles of DRAM traffic. Seen as `WRITEBACK of address 0` in the `VIMA_DEBUG` traces.
 - [ ] **Reused vectors are fetched again.** With 8 lines, the broadcast `low`/`high` vectors are evicted between blocks and fetched again (e.g. 235167744 fetched three times in region 2). May be a valid effect of the cache size; check after the other fixes.
 - [ ] **In-order entry costs some overlap.** Region 2 went from 180,836 to 203,108 cycles (+12%) after the deadlock fix: an instruction now waits until all its lines are free. Revisit only if it matters after the fixes above.
 
 ## 3. Open: other findings
 
 - [x] **`VIMA_Cache_Avg._Fetch_Latency` reports 1** while fetches take thousands of cycles. The fetch and writeback counters were never initialised (~1e14 / ~1e14), and the totals read only way 0 of each set. Fixed in 4b075eb; region 2 now reports 6,519 cycles per fetch.
-- [ ] **VIMA results are never written back to DRAM.** Found with the fixed stats: `VIMA_Cache_Writebacks` is 0. At completion the destination is marked dirty and set to WAIT (it fetches the old 8 KB), and `fetch()` sets `dirty = false` when it finishes (`vima_vector.cpp:66`), so the result is marked clean. Fix together with "destinations are fetched before being overwritten" (section 2).
+- [x] **VIMA results are never written back to DRAM.** Fixed in 2ff41c6: results stay dirty and are written back on eviction; lookups match the vector a line holds or is about to hold, and busy lines are not evicted. VIMA scans (100k rows): 2.09–3.24 M cycles, 12–27% faster; vecsum 12% slower (same request count, writes instead of reads).
+
+  Original finding: Found with the fixed stats: `VIMA_Cache_Writebacks` is 0. At completion the destination is marked dirty and set to WAIT (it fetches the old 8 KB), and `fetch()` sets `dirty = false` when it finishes (`vima_vector.cpp:66`), so the result is marked clean. Fix together with "destinations are fetched before being overwritten" (section 2).
 - [ ] **Gathers fetch the wrong lines.** The tracer records `fgtrs` as (base, indices, destination), and the controller fetches the source as 8 KB contiguous from `base`, forced to miss. A real 2048-element gather touches up to 2048 lines spread over the column: OrCS undercounts gather traffic up to 16× and fetches the wrong addresses. `vima_vector_t::gather` (random addresses) is never set, and random addresses would not be better. Decide: record the gathered addresses in the trace (tracer + trace format + controller), or another model. Affects the `vima_selvec_*` scans.
 - [ ] **Unaligned operands: small effect today, two latent issues.** In the large-input scan traces 51–89% of vectors are unaligned (e.g. 135 of 186 in `vima_bitmap_reeval`). Measured over all 8 VIMA scan traces: no two different vectors share an 8 KB-aligned block, so no false hits yet. Latent issues:
   - The VIMA cache identifies a vector by its 8 KB-aligned block (tag and index drop the low 13 bits), so two unaligned vectors starting in the same block would be treated as one (false hit). `store_hash` aliases the same way (only over-serializes).
@@ -51,5 +57,8 @@ After the fixes below, the four VIMA scans finish (100k-row input): 2.8–4.1 M 
   Decide: track VIMA operands (3 × 8 KB ranges) in disambiguation, or send VIMA instructions to the controller in program order and make CPU loads wait on pending VIMA writes.
 
 ## 4. Found while investigating section 3
+
+- [ ] **`fmovs` (broadcast) fetches its destination.** The tracer records 1-operand instructions as read and written at the destination (`hmc_write_memory_1param`), so OrCS sees an in-place operation and fetches 8 KB before overwriting it (region 1: 128 requests for one `fmovs`). The destination of a broadcast should be write-only.
+- [ ] **No coherence between the VIMA cache and the CPU caches.** In selvec, the CPU writes the row ids into its caches and VIMA reads them from DRAM; CPU accesses to VIMA results also go through the CPU caches. Santos (2022) assumes VIMA data lives in a non-cacheable region (Sec. 4.4); OrCS does not model it.
 
 - [ ] **Every DRAM request becomes row-sized sub-requests.** `requestDRAM` splits any request into `BANK_ROW_BUFFER_SIZE` (8 KB) sub-requests, and the channel is selected by the bits just above the row (`channel_bits_shift = log2(BANK_ROW_BUFFER_SIZE)`). A vector fetch sends 128 line requests that all map to one channel and one row. Likely cause of "8 KB fetches are serialized" (section 2). Check what each sub-request costs before changing it.
