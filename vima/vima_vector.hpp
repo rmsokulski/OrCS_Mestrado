@@ -20,6 +20,7 @@ class vima_vector_t {
         bool scatter;
         bool dirty;
         uint32_t users;     /// VIMA instructions holding this line (sources and destination); evictable only at 0
+        bool pending_result; /// A result waits for the old (dirty) vector's writeback before taking the line
 
         uint64_t fetch_start;
         uint64_t fetch_count;
@@ -37,6 +38,10 @@ class vima_vector_t {
         bool ready();
         void fetch (bool random);
         void writeback (bool random);
+        void install_result (uint64_t result_address);
+        void finish_writeback();
+        bool busy();
+        uint64_t held_address();
 
         INSTANTIATE_GET_SET_ADD (uint32_t,no_sub_requests)
         INSTANTIATE_GET_SET_ADD (uint64_t,address)

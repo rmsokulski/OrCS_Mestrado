@@ -18,6 +18,7 @@ vima_vector_t::vima_vector_t(){
     this->dirty = false;
     this->gather = false;
     this->scatter = false;
+    this->pending_result = false;
 
     this->fetch_start = 0;
     this->fetch_count = 0;
@@ -118,13 +119,52 @@ void vima_vector_t::writeback (bool random) {
             ORCS_PRINTF ("%lu VIMA Cache [%lu][%lu] WRITEBACK of address %lu FINISHED! Took %lu cycles.\n", orcs_engine.get_global_cycle(), this->set, this->column, this->address, (orcs_engine.get_global_cycle() - this->writeback_start))
         #endif
         this->writeback_latency_total += (orcs_engine.get_global_cycle() - this->writeback_start);
-        status = PACKAGE_STATE_WAIT;
+        this->finish_writeback();
         }
-    } else status = PACKAGE_STATE_WAIT;
+    } else this->finish_writeback();
     //setar todas as instruções para STORE
     //enviar todas as instruções para a DRAM
     //contar quantas estão prontas
     //if contagem == total, torna-se WAIT
+}
+
+/// After the old vector is written back: a pending result takes the line
+/// (no fetch, the instruction wrote every element); otherwise fetch next_address
+void vima_vector_t::finish_writeback() {
+    if (this->pending_result) {
+        this->pending_result = false;
+        this->address = this->next_address;
+        this->dirty = true;
+        this->lru = orcs_engine.get_global_cycle();
+        this->status = PACKAGE_STATE_READY;
+    } else status = PACKAGE_STATE_WAIT;
+}
+
+/// A VIMA instruction's result (it writes every element of the vector). The line
+/// keeps it dirty until eviction, when writeback() sends it to DRAM. If the line
+/// still holds a different dirty vector, that one is written back first.
+void vima_vector_t::install_result (uint64_t result_address) {
+    this->next_address = result_address;
+    if (this->dirty && this->address != result_address) {
+        this->pending_result = true;
+        this->status = PACKAGE_STATE_TRANSMIT;
+    } else {
+        this->address = result_address;
+        this->dirty = true;
+        this->lru = orcs_engine.get_global_cycle();
+        this->status = PACKAGE_STATE_READY;
+    }
+}
+
+/// A fetch or writeback is in flight (its sub-requests are in use), or a result
+/// waits for the old vector's writeback, which may not have started yet
+bool vima_vector_t::busy() {
+    return this->pending_result || this->sub_ready < this->no_sub_requests;
+}
+
+/// The vector this line holds, or is fetching / about to hold
+uint64_t vima_vector_t::held_address() {
+    return this->next_address != 0 ? this->next_address : this->address;
 }
 
 void vima_vector_t::clock() {

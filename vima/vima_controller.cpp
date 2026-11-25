@@ -129,14 +129,14 @@ vima_vector_t* vima_controller_t::search_cache (uint64_t address, cache_status_t
     if (VIMA_CACHE_ASSOCIATIVITY == 1){
         index = get_index (address);
         for (uint32_t i = 0; i < get_lines(); i++){
-            if (get_index(cache[i][0].get_address()) == get_index (address) && get_tag(cache[i][0].get_address()) == get_tag (address)) {
+            if (get_index(cache[i][0].held_address()) == get_index (address) && get_tag(cache[i][0].held_address()) == get_tag (address)) {   /// Held or being fetched / installed
                 *result = HIT;
                 #if VIMA_DEBUG 
                     ORCS_PRINTF ("%lu VIMA Cache HIT! address %lu, tag = %lu, index = %lu.\n", orcs_engine.get_global_cycle(), address, get_tag (address), get_index (address))
                 #endif
                 ret = &cache[i][0];
                 break;
-            } else if (cache[i][0].lru < lru_cycle && cache[i][0].users == 0) {
+            } else if (cache[i][0].lru < lru_cycle && cache[i][0].users == 0 && !cache[i][0].busy()) {
                 lru_cycle = cache[i][0].lru;
                 lru_way = i;
             }
@@ -144,7 +144,7 @@ vima_vector_t* vima_controller_t::search_cache (uint64_t address, cache_status_t
     } else {
         index = get_index (address);
         for (i = 0; i < VIMA_CACHE_ASSOCIATIVITY; i++){
-            if (get_tag(cache[index][i].get_address()) == get_tag (address) && get_tag(cache[index][i].get_address()) == get_tag (address)) {
+            if (get_tag(cache[index][i].held_address()) == get_tag (address)) {
                 *result = HIT;
                 #if VIMA_DEBUG 
                     ORCS_PRINTF ("%lu VIMA Cache HIT! address %lu, tag = %lu, index = %lu.\n", orcs_engine.get_global_cycle(), address, get_tag (address), get_index (address))
@@ -152,7 +152,7 @@ vima_vector_t* vima_controller_t::search_cache (uint64_t address, cache_status_t
 		        ret = &cache[index][i];
                 break;
             }
-            else if (cache[index][i].lru < lru_cycle && cache[index][i].users == 0) {
+            else if (cache[index][i].lru < lru_cycle && cache[index][i].users == 0 && !cache[index][i].busy()) {
                 lru_cycle = cache[index][i].lru;
                 lru_way = i;
             }
@@ -204,15 +204,13 @@ void vima_controller_t::check_completion (int index){
 
     /// The destination line was taken when the instruction entered (can_enter)
     vima_vector_t* destination = instruction->vima_write_vec;
+    /// The result overwrites the whole vector: no fetch of the old contents.
+    /// It stays dirty until eviction; a different dirty vector in the line is
+    /// written back first.
     if (destination != NULL){
-        if (destination->dirty){
-            this->add_cache_writebacks();
-            destination->status = PACKAGE_STATE_TRANSMIT;
-        } else destination->status = PACKAGE_STATE_WAIT;
-
-        destination->set_next_address (instruction->vima_write);
+        if (destination->dirty && destination->get_address() != instruction->vima_write) this->add_cache_writebacks();
+        destination->install_result (instruction->vima_write);
         destination->set_tag (get_tag (instruction->vima_write));
-        destination->dirty = true;
     }
 
     release_line (instruction->vima_read1_vec);
@@ -243,7 +241,7 @@ bool vima_controller_t::can_enter (int index){
     uint32_t unused = 0;
     for (uint32_t i = 0; i < sets; i++)
         for (size_t j = 0; j < VIMA_CACHE_ASSOCIATIVITY; j++)
-            if (this->cache[i][j].users == 0) unused++;
+            if (this->cache[i][j].users == 0 && !this->cache[i][j].busy()) unused++;   /// Busy: its sub-requests are in flight
     return unused >= distinct;
 }
 
