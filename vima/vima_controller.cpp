@@ -66,10 +66,12 @@ void vima_controller_t::statistics(FILE *output){
         uint64_t total_writeback_latency = 0;
         uint64_t total_writeback_count = 0;
         for (i = 0; i < sets; i++) {
-            total_fetch_count += this->cache[i]->fetch_count;
-            total_fetch_latency += this->cache[i]->fetch_latency_total;
-            total_writeback_count += this->cache[i]->writeback_count;
-            total_writeback_latency += this->cache[i]->writeback_latency_total;
+            for (size_t j = 0; j < VIMA_CACHE_ASSOCIATIVITY; j++) {   /// Every way, not only way 0
+                total_fetch_count += this->cache[i][j].fetch_count;
+                total_fetch_latency += this->cache[i][j].fetch_latency_total;
+                total_writeback_count += this->cache[i][j].writeback_count;
+                total_writeback_latency += this->cache[i][j].writeback_latency_total;
+            }
         }
 
         if (total_fetch_count != 0) fprintf(output,"VIMA_Cache_Avg._Fetch_Latency:     %lu\n", total_fetch_latency/total_fetch_count);
@@ -88,10 +90,12 @@ void vima_controller_t::reset_statistics(){
     this->set_cache_writebacks(0);
     
     for (i = 0; i < sets; i++) {
-        this->cache[i]->fetch_count = 0;
-        this->cache[i]->fetch_latency_total = 0;
-        this->cache[i]->writeback_count = 0;
-        this->cache[i]->writeback_latency_total = 0;
+        for (size_t j = 0; j < VIMA_CACHE_ASSOCIATIVITY; j++) {
+            this->cache[i][j].fetch_count = 0;
+            this->cache[i][j].fetch_latency_total = 0;
+            this->cache[i][j].writeback_count = 0;
+            this->cache[i][j].writeback_latency_total = 0;
+        }
     }
 
     this->total_wait = 0;

@@ -18,6 +18,13 @@ vima_vector_t::vima_vector_t(){
     this->dirty = false;
     this->gather = false;
     this->scatter = false;
+
+    this->fetch_start = 0;
+    this->fetch_count = 0;
+    this->fetch_latency_total = 0;
+    this->writeback_start = 0;
+    this->writeback_count = 0;
+    this->writeback_latency_total = 0;
 }
 vima_vector_t::~vima_vector_t(){
     delete[] sub_requests;
