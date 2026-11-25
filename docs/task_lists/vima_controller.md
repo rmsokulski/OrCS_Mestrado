@@ -9,7 +9,7 @@ Found while simulating the VIMA scan kernels (`trace_generator/kernels/Extracted
 - **Controller (`vima/vima_controller.cpp`)**: instructions enter (PACKAGE_STATE_VIMA), wait for their source vectors (TRANSMIT), and complete in order at the head of `vima_buffer` (`check_completion`).
 - **VIMA cache (`vima/vima_vector.cpp`)**: each line holds one 8 KB vector; a fetch or writeback sends 128 line requests to DRAM and waits for all of them.
 
-After the fixes below, the four VIMA scans finish (100k-row input): 2.8–4.1 M cycles, 1.2–1.7× faster than scalar. But each VIMA instruction still costs about 4,000–5,000 cycles; the open items explain most of it.
+After the fixes below, the four VIMA scans finish (100k-row input). Since f5b172d they run on the 3D-stacked memory (`memory_controller_3D_closed.cfg`): 0.21–1.99 M cycles, 3–21× faster than scalar.
 
 ## 1. Fixed
 
@@ -24,7 +24,9 @@ After the fixes below, the four VIMA scans finish (100k-row input): 2.8–4.1 M 
 
 ## 2. Open: slowness
 
-- [ ] **8 KB fetches are serialized.** An isolated vector fetch takes about 5,100 cycles, about 40 cycles per 64 B line, as if all 128 lines go to one channel and bank. DRAM traffic is uneven too: in region 2, channels 1 and 3 served 3,100 and 3,800 lines, channels 0 and 2 about 800 each. Check the DRAM address mapping (`BANK_ROW_BUFFER_SIZE = 8192` equals the vector size) and how `requestDRAM` queues a vector's sub-requests. May be intended hardware behaviour; decide before changing.
+- [x] **8 KB fetches are serialized.** Resolved in f5b172d by switching `skylakeServerVIMA.cfg` to the 3D-stacked memory controller (`memory_controller_3D_closed.cfg`), the memory VIMA was proposed for. A vector now spreads over all 32 vaults (one 256 B row each, 1 miss + 3 hits): about 350 cycles per fetch, down from ~6,500. VIMA scans (100k rows): bitmap 0.21–0.26 M cycles (~20× scalar), selvec 1.63–1.99 M (~3×). Cause on DDR: see "Every DRAM request becomes row-sized sub-requests" (section 4).
+
+  Original finding: An isolated vector fetch takes about 5,100 cycles, about 40 cycles per 64 B line, as if all 128 lines go to one channel and bank. DRAM traffic is uneven too: in region 2, channels 1 and 3 served 3,100 and 3,800 lines, channels 0 and 2 about 800 each. Check the DRAM address mapping (`BANK_ROW_BUFFER_SIZE = 8192` equals the vector size) and how `requestDRAM` queues a vector's sub-requests. May be intended hardware behaviour; decide before changing.
 - [x] **Destinations are fetched before being overwritten.** Fixed in 2ff41c6 (with the next two items): the result is installed without a fetch.
 
   Original finding: At completion the destination line is set to WAIT (or TRANSMIT if dirty), so it fetches the old 8 KB from DRAM even when the instruction writes every element, and even on a hit. `check_completion()` has the "dirty → TRANSMIT, else WAIT" block twice in the old code; the second one applied on every path.
@@ -63,4 +65,4 @@ After the fixes below, the four VIMA scans finish (100k-row input): 2.8–4.1 M 
   Original finding: The tracer records 1-operand instructions as read and written at the destination (`hmc_write_memory_1param`), so OrCS sees an in-place operation and fetches 8 KB before overwriting it (region 1: 128 requests for one `fmovs`). The destination of a broadcast should be write-only.
 - [ ] **No coherence between the VIMA cache and the CPU caches.** In selvec, the CPU writes the row ids into its caches and VIMA reads them from DRAM; CPU accesses to VIMA results also go through the CPU caches. Santos (2022) assumes VIMA data lives in a non-cacheable region (Sec. 4.4); OrCS does not model it.
 
-- [ ] **Every DRAM request becomes row-sized sub-requests.** `requestDRAM` splits any request into `BANK_ROW_BUFFER_SIZE` (8 KB) sub-requests, and the channel is selected by the bits just above the row (`channel_bits_shift = log2(BANK_ROW_BUFFER_SIZE)`). A vector fetch sends 128 line requests that all map to one channel and one row. Likely cause of "8 KB fetches are serialized" (section 2). Check what each sub-request costs before changing it.
+- [ ] **Every DRAM request becomes row-sized sub-requests (DDR configs only).** No longer affects VIMA results since f5b172d (3D memory, 256 B rows). Still affects CPU simulations on DDR configs. `requestDRAM` splits any request into `BANK_ROW_BUFFER_SIZE` (8 KB) sub-requests, and the channel is selected by the bits just above the row (`channel_bits_shift = log2(BANK_ROW_BUFFER_SIZE)`). A vector fetch sends 128 line requests that all map to one channel and one row. Likely cause of "8 KB fetches are serialized" (section 2). Check what each sub-request costs before changing it.
