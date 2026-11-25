@@ -3686,16 +3686,22 @@ memory_order_buffer_line_t *processor_t::get_next_op_hive()
 
 memory_order_buffer_line_t *processor_t::get_next_op_vima()
 {
+	/// VIMA instructions are sent in program order: only the oldest one not yet
+	/// sent may go. The VIMA controller executes them in arrival order, so a
+	/// younger instruction sent first could overwrite an older one's sources.
 	uint32_t pos = this->memory_order_buffer_vima_start;
 	for (uint32_t i = 0; i < this->memory_order_buffer_vima_used; i++)
 	{
-		if (this->memory_order_buffer_vima[pos].uop_executed &&
-			this->memory_order_buffer_vima[pos].status == PACKAGE_STATE_WAIT &&
-			this->memory_order_buffer_vima[pos].sent == false &&
-			this->memory_order_buffer_vima[pos].wait_mem_deps_number == 0 &&
-			this->memory_order_buffer_vima[pos].readyToGo <= orcs_engine.get_global_cycle())
+		if (!this->memory_order_buffer_vima[pos].sent)
 		{
-			return &this->memory_order_buffer_vima[pos];
+			if (this->memory_order_buffer_vima[pos].uop_executed &&
+				this->memory_order_buffer_vima[pos].status == PACKAGE_STATE_WAIT &&
+				this->memory_order_buffer_vima[pos].wait_mem_deps_number == 0 &&
+				this->memory_order_buffer_vima[pos].readyToGo <= orcs_engine.get_global_cycle())
+			{
+				return &this->memory_order_buffer_vima[pos];
+			}
+			return NULL;   /// The oldest unsent one is not ready: nothing younger passes it
 		}
 		pos++;
 		if (pos >= MOB_VIMA)
